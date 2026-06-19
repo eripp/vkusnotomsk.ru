@@ -36,7 +36,10 @@ async def send_otp_code(phone: str, code: str, channel: OtpChannel) -> None:
     text = f"Ваш код подтверждения Вкусно: {code}"
     if channel == OtpChannel.tg:
         logger.info("[OTP/TG] phone=%s code=%s", phone, code)
-        await _send_tg_by_phone(phone, text)
+        # 1) Telegram Gateway (по номеру, без бота) — если настроен;
+        # 2) иначе бот по сохранённому chat_id.
+        if not await send_telegram_gateway(phone, code):
+            await _send_tg_by_phone(phone, text)
     else:
         logger.info("[OTP/MAX] phone=%s code=%s", phone, code)
         await send_max(phone, text)
@@ -156,6 +159,37 @@ async def send_max(phone: str, text: str) -> None:
                 logger.info("[MAX] отправлено %s", phone)
     except Exception as exc:
         logger.error("[MAX] исключение: %s", exc)
+
+
+async def send_telegram_gateway(phone: str, code: str) -> bool:
+    """Отправляет код подтверждения через Telegram Gateway API
+    (gatewayapi.telegram.org/sendVerificationMessage). Код генерируем мы и
+    передаём его в Gateway — он только доставляет сообщение в Telegram по номеру.
+    Возвращает True, если запрос принят Gateway."""
+    from app.config import settings
+    if not settings.TG_GATEWAY_TOKEN:
+        return False
+
+    # E.164: +7XXXXXXXXXX
+    phone_e164 = phone if phone.startswith("+") else "+" + phone
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://gatewayapi.telegram.org/sendVerificationMessage",
+                headers={"Authorization": f"Bearer {settings.TG_GATEWAY_TOKEN}"},
+                json={"phone_number": phone_e164, "code": code, "ttl": 300},
+            )
+            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+            if resp.status_code < 400 and data.get("ok"):
+                logger.info("[TG-Gateway] отправлено %s (request_id=%s)",
+                            phone_e164, (data.get("result") or {}).get("request_id"))
+                return True
+            logger.warning("[TG-Gateway] ошибка %s: %s", resp.status_code, resp.text[:200])
+            return False
+    except Exception as exc:
+        logger.error("[TG-Gateway] исключение: %s", exc)
+        return False
 
 
 async def send_telegram(chat_id: int, text: str) -> None:

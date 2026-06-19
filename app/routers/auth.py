@@ -89,11 +89,11 @@ async def send_otp(payload: SendOtpIn, db: AsyncSession = Depends(get_db)):
 
     resp = {"status": "sent", "expires_in": OTP_TTL_SECONDS}
 
-    # Dev-режим: если каналы доставки (Telegram/MAX) не настроены, кода всё равно
-    # никуда не уйдёт — возвращаем его в ответе, чтобы вход работал на
-    # тест/временном домене. На проде с настроенными ключами это отключается.
+    # Dev-режим: если НИ ОДИН канал доставки (Telegram Gateway / TG-бот / MAX)
+    # не настроен, код никуда не уйдёт — возвращаем его в ответе, чтобы вход
+    # работал на тест/временном домене. На проде с ключами это отключается.
     from app.config import settings as _s
-    if not _s.TG_BOT_TOKEN and not _s.MAX_API_KEY:
+    if not _s.TG_GATEWAY_TOKEN and not _s.TG_BOT_TOKEN and not _s.MAX_API_KEY:
         resp["dev_code"] = code
 
     return resp

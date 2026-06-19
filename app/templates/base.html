@@ -140,6 +140,42 @@ const auth = {
   },
   _phone() { return document.getElementById('auth-phone').value.trim(); },
 
+  // Маска +7 (XXX) XXX-XX-XX
+  _formatPhone(raw) {
+    let d = raw.replace(/\D/g, '');
+    if (!d) return '';
+    // первая цифра → 7 (8 тоже трактуем как 7)
+    if (d[0] === '8') d = '7' + d.slice(1);
+    if (d[0] !== '7') d = '7' + d;
+    d = d.slice(0, 11);                     // 7 + 10 цифр
+    const p = d.slice(1);                   // 10 цифр номера
+    let out = '+7';
+    if (p.length > 0) out += ' (' + p.slice(0, 3);
+    if (p.length >= 3) out += ')';
+    if (p.length > 3) out += ' ' + p.slice(3, 6);
+    if (p.length > 6) out += '-' + p.slice(6, 8);
+    if (p.length > 8) out += '-' + p.slice(8, 10);
+    return out;
+  },
+
+  init() {
+    const phone = document.getElementById('auth-phone');
+    const code  = document.getElementById('auth-code');
+    if (phone) {
+      phone.addEventListener('input', () => {
+        phone.value = this._formatPhone(phone.value);
+      });
+      phone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); this.sendCode(); }
+      });
+    }
+    if (code) {
+      code.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); this.verify(); }
+      });
+    }
+  },
+
   async sendCode() {
     const phone = this._phone();
     if (phone.replace(/\D/g, '').length < 10) { this._err('Введите корректный номер телефона'); return; }
@@ -186,6 +222,7 @@ const auth = {
 
 // Кнопка «Личный кабинет»: если уже вошли — в кабинет, иначе — модалка входа
 document.addEventListener('DOMContentLoaded', () => {
+  auth.init();
   const btn = document.getElementById('account-btn');
   if (!btn) return;
   btn.addEventListener('click', async (e) => {

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     DADATA_SECRET: str = ""
     TG_BOT_TOKEN: str = ""
     TG_BOT_USERNAME: str = ""
+    TG_GATEWAY_TOKEN: str = ""   # Telegram Gateway API (gatewayapi.telegram.org) — коды в Telegram по номеру
     MAX_API_KEY: str = ""
     SMTP_HOST: str = "smtp.yandex.ru"
     SMTP_PORT: int = 465

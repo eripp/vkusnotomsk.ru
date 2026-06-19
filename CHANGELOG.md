@@ -6,6 +6,22 @@
 
 ## [Unreleased]
 
+### 2026-06-19 — Telegram Gateway + маска телефона
+
+#### Added
+- Авторизация по OTP через **Telegram Gateway API**
+  (`gatewayapi.telegram.org/sendVerificationMessage`): код генерируем мы,
+  Gateway доставляет его в Telegram по номеру телефона (без бота). Канал `tg`
+  сначала пробует Gateway, при неудаче — fallback на бота по `chat_id`.
+  Ключ `TG_GATEWAY_TOKEN` — `app/config.py`, `.env.example`,
+  `app/services/notifications.py` (`send_telegram_gateway`).
+- Dev-режим показа кода учитывает Gateway: `dev_code` отдаётся, только если не
+  настроен ни Gateway, ни бот, ни MAX — `app/routers/auth.py`.
+
+#### Changed
+- В модалке входа: маска телефона `+7 (XXX) XXX-XX-XX` и отправка по Enter
+  (телефон → «Получить код», код → «Войти») — `app/templates/base.html`.
+
 ### 2026-06-19 — Личный кабинет: вход по OTP с главной
 
 #### Added
