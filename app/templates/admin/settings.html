@@ -1,0 +1,127 @@
+{% extends "admin/base.html" %}
+{% block title %}Настройки{% endblock %}
+{% block page_title %}Настройки сайта{% endblock %}
+{% set active = 'settings' %}
+
+{% macro val(key, default='') %}{{ settings_map.get(key, default) }}{% endmacro %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" type="submit" form="settings-form">💾 Сохранить</button>
+{% endblock %}
+
+{% block content %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+
+<form method="post" action="/admin/settings" id="settings-form">
+
+  <!-- Оформление -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Оформление</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Фирменный цвет <span style="color:#aaa;font-weight:400">— кнопки, акценты на сайте (brand_color)</span></label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="color" id="brand-color-picker"
+                 value="{{ val('brand_color') or '#E85D24' }}"
+                 style="width:48px;height:38px;padding:2px;cursor:pointer">
+          <input type="text" name="brand_color" id="brand-color-text"
+                 value="{{ val('brand_color') or '#E85D24' }}"
+                 placeholder="#E85D24" style="max-width:140px;font-family:monospace">
+          <span style="color:#aaa;font-size:12px">по умолчанию #E85D24</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Яндекс.Метрика -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Яндекс.Метрика</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Номер счётчика <span style="color:#aaa;font-weight:400">— metrika_id</span></label>
+        <input name="metrika_id" value="{{ val('metrika_id') }}" placeholder="12345678" style="max-width:200px">
+      </div>
+      <div class="adm-field">
+        <label>
+          <input type="checkbox" name="metrika_webvisor" value="1" {{ 'checked' if val('metrika_webvisor') == '1' }}>
+          &nbsp;Вебвизор
+        </label>
+      </div>
+      <div class="adm-field">
+        <label>
+          <input type="checkbox" name="metrika_ecom" value="1" {{ 'checked' if val('metrika_ecom') == '1' }}>
+          &nbsp;Электронная коммерция (dataLayer: view_item, add_to_cart, purchase)
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Яндекс.Вебмастер -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Яндекс.Вебмастер</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Verification-ключ <span style="color:#aaa;font-weight:400">— meta yandex-verification</span></label>
+        <input name="yandex_verification" value="{{ val('yandex_verification') }}" placeholder="abcdef1234567890">
+      </div>
+    </div>
+  </div>
+
+  <!-- Произвольные скрипты -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Произвольные скрипты</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>В &lt;head&gt; <span style="color:#aaa;font-weight:400">— GTM, пиксели и т.д.</span></label>
+        <textarea name="head_scripts" rows="4" style="font-family:monospace;font-size:12px;width:100%">{{ val('head_scripts') }}</textarea>
+      </div>
+      <div class="adm-field">
+        <label>Перед &lt;/body&gt; <span style="color:#aaa;font-weight:400">— чаты, ретаргетинг и т.д.</span></label>
+        <textarea name="body_scripts" rows="4" style="font-family:monospace;font-size:12px;width:100%">{{ val('body_scripts') }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dadata (адреса и геокодинг) -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Dadata — адреса и геокодинг</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>API-ключ <span style="color:#aaa;font-weight:400">— dadata_token (используется для подсказок и карты)</span></label>
+        <input name="dadata_token" value="{{ val('dadata_token') }}" placeholder="9222f9ef…" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>Секретный ключ <span style="color:#aaa;font-weight:400">— dadata_secret (для стандартизации, опционально)</span></label>
+        <input name="dadata_secret" value="{{ val('dadata_secret') }}" placeholder="33b7d2c0…" autocomplete="off" style="font-family:monospace">
+      </div>
+      <p class="adm-hint" style="color:#888;font-size:12px;margin:4px 0 0">
+        Если поле пустое — берётся значение из .env. Заполненное здесь имеет приоритет.
+      </p>
+    </div>
+  </div>
+
+  <!-- Кешбэк -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Кешбэк</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Максимальный % оплаты кешбэком <span style="color:#aaa;font-weight:400">— cashback_max_pct</span></label>
+        <input name="cashback_max_pct" type="number" min="0" max="100" value="{{ val('cashback_max_pct', '30') }}" style="max-width:100px">
+      </div>
+    </div>
+  </div>
+</form>
+
+<script>
+// Синхронизация color-picker и текстового поля фирменного цвета
+(() => {
+  const picker = document.getElementById('brand-color-picker');
+  const text   = document.getElementById('brand-color-text');
+  if (!picker || !text) return;
+  picker.addEventListener('input', () => { text.value = picker.value; });
+  text.addEventListener('input', () => {
+    if (/^#[0-9a-fA-F]{6}$/.test(text.value.trim())) picker.value = text.value.trim();
+  });
+})();
+</script>
+{% endblock %}

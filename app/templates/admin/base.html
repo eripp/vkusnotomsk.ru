@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Админ{% endblock %} · Вкусно</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+    body { font-family: system-ui, sans-serif; font-size: 14px; background: #f0f2f5; color: #222; min-height: 100vh; display: flex }
+
+    /* ── Sidebar ───────────────────────────────── */
+    .adm-sidebar {
+      width: 220px; min-height: 100vh; background: #1a1a2e; color: #ccc;
+      display: flex; flex-direction: column; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    }
+    .adm-logo { padding: 20px 18px 16px; font-size: 18px; font-weight: 700; color: #ff6b2c; border-bottom: 1px solid #2a2a4a; text-decoration: none; display: block }
+    .adm-nav { flex: 1; padding: 8px 0 }
+    .adm-nav a {
+      display: flex; align-items: center; gap: 10px; padding: 10px 18px;
+      color: #aaa; text-decoration: none; transition: background .15s, color .15s; font-size: 13px;
+    }
+    .adm-nav a:hover { background: #2a2a4a; color: #fff }
+    .adm-nav a.active { background: #ff6b2c22; color: #ff6b2c; border-left: 3px solid #ff6b2c }
+    .adm-nav .nav-section { padding: 14px 18px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #555 }
+    .adm-sidebar-footer { padding: 14px 18px; border-top: 1px solid #2a2a4a; font-size: 12px; color: #555 }
+    .adm-sidebar-footer a { color: #aaa; text-decoration: none }
+    .adm-sidebar-footer a:hover { color: #fff }
+
+    /* ── Main ──────────────────────────────────── */
+    .adm-main { flex: 1; display: flex; flex-direction: column; min-width: 0 }
+    .adm-topbar {
+      background: #fff; border-bottom: 1px solid #e8e8e8; padding: 12px 24px;
+      display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10;
+    }
+    .adm-topbar h1 { font-size: 17px; font-weight: 600; flex: 1 }
+    .adm-content { padding: 24px; flex: 1 }
+
+    /* ── Cards & Tables ────────────────────────── */
+    .adm-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px #0001; padding: 20px; margin-bottom: 20px }
+    .adm-card-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #111 }
+    .adm-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px }
+    .adm-stat { background: #fff; border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 4px #0001 }
+    .adm-stat-val { font-size: 28px; font-weight: 700; color: #ff6b2c }
+    .adm-stat-label { font-size: 12px; color: #888; margin-top: 4px }
+
+    table.adm-table { width: 100%; border-collapse: collapse }
+    table.adm-table th { text-align: left; padding: 8px 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #888; border-bottom: 2px solid #f0f0f0 }
+    table.adm-table td { padding: 10px 12px; border-bottom: 1px solid #f5f5f5; vertical-align: middle }
+    table.adm-table tr:last-child td { border-bottom: none }
+    table.adm-table tr:hover td { background: #fafafa }
+    .adm-table-wrap { overflow-x: auto }
+
+    /* ── Badges ────────────────────────────────── */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600 }
+    .badge-new      { background: #e3f0ff; color: #1a6fd4 }
+    .badge-accepted { background: #e8f8e8; color: #1a7a1a }
+    .badge-delivery { background: #fff3e0; color: #c76c00 }
+    .badge-done     { background: #f0f0f0; color: #666 }
+    .badge-canceled { background: #ffe8e8; color: #c00 }
+    .badge-paid     { background: #e8f8e8; color: #1a7a1a }
+    .badge-pending  { background: #fff3e0; color: #c76c00 }
+    .badge-refunded { background: #f0e8ff; color: #8833cc }
+    .badge-active   { background: #e8f8e8; color: #1a7a1a }
+    .badge-inactive { background: #f0f0f0; color: #888 }
+
+    /* ── Forms ─────────────────────────────────── */
+    .adm-form { display: grid; gap: 14px; max-width: 560px }
+    .adm-field label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 500 }
+    .adm-field input, .adm-field select, .adm-field textarea {
+      width: 100%; padding: 8px 11px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit;
+      transition: border-color .15s;
+    }
+    .adm-field input:focus, .adm-field select:focus, .adm-field textarea:focus { outline: none; border-color: #ff6b2c }
+    .adm-field textarea { resize: vertical; min-height: 80px }
+    .adm-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+
+    /* ── Buttons ────────────────────────────────── */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; text-decoration: none; transition: opacity .15s }
+    .btn:hover { opacity: .85 }
+    .btn-primary   { background: #ff6b2c; color: #fff }
+    .btn-secondary { background: #f0f0f0; color: #333 }
+    .btn-danger    { background: #ffe8e8; color: #c00 }
+    .btn-sm { padding: 4px 10px; font-size: 12px }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+
+    /* ── Filters ───────────────────────────────── */
+    .adm-filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center }
+    .adm-filters input, .adm-filters select { padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit }
+    .adm-filters input:focus, .adm-filters select:focus { outline: none; border-color: #ff6b2c }
+
+    /* ── Pagination ─────────────────────────────── */
+    .adm-pagination { display: flex; gap: 4px; margin-top: 16px; align-items: center }
+    .adm-pagination a, .adm-pagination span {
+      padding: 5px 10px; border-radius: 5px; font-size: 12px; text-decoration: none; color: #333;
+    }
+    .adm-pagination a:hover { background: #f0f0f0 }
+    .adm-pagination .cur { background: #ff6b2c; color: #fff }
+
+    /* ── Alert ──────────────────────────────────── */
+    .adm-alert { padding: 10px 14px; border-radius: 7px; margin-bottom: 16px; font-size: 13px }
+    .adm-alert-ok  { background: #e8f8e8; color: #1a7a1a }
+    .adm-alert-err { background: #ffe8e8; color: #c00 }
+
+    /* ── Modal overlay (JS) ─────────────────────── */
+    .adm-modal-bg { position: fixed; inset: 0; background: #0006; z-index: 100; display: flex; align-items: center; justify-content: center }
+    .adm-modal { background: #fff; border-radius: 12px; padding: 28px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto }
+    .adm-modal h3 { font-size: 16px; margin-bottom: 18px }
+
+    @media (max-width: 700px) {
+      .adm-sidebar { display: none }
+      .adm-field-row { grid-template-columns: 1fr }
+    }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<aside class="adm-sidebar">
+  <a href="/admin" class="adm-logo">⚡ Вкусно · Админ</a>
+  <nav class="adm-nav">
+    <div class="nav-section">Продажи</div>
+    <a href="/admin/orders" {% if active == 'orders' %}class="active"{% endif %}>📋 Заказы</a>
+    <div class="nav-section">Каталог</div>
+    <a href="/admin/products" {% if active == 'products' %}class="active"{% endif %}>🍱 Товары</a>
+    <a href="/admin/categories" {% if active == 'categories' %}class="active"{% endif %}>📁 Категории</a>
+    <a href="/admin/stories" {% if active == 'stories' %}class="active"{% endif %}>📖 Сторис</a>
+    <div class="nav-section">Клиенты</div>
+    <a href="/admin/users" {% if active == 'users' %}class="active"{% endif %}>👤 Пользователи</a>
+    <a href="/admin/promocodes" {% if active == 'promocodes' %}class="active"{% endif %}>🎟 Промокоды</a>
+    <a href="/admin/cashback" {% if active == 'cashback' %}class="active"{% endif %}>💰 Кешбэк</a>
+    <a href="/admin/reports" {% if active == 'reports' %}class="active"{% endif %}>📊 Отчёты</a>
+    <div class="nav-section">Настройки</div>
+    <a href="/admin/zones" {% if active == 'zones' %}class="active"{% endif %}>🗺 Зоны доставки</a>
+    <a href="/admin/schedule" {% if active == 'schedule' %}class="active"{% endif %}>🕐 Расписание</a>
+    <a href="/admin/settings" {% if active == 'settings' %}class="active"{% endif %}>⚙️ Настройки</a>
+  </nav>
+  <div class="adm-sidebar-footer">
+    <a href="/" target="_blank">← Сайт</a>
+  </div>
+</aside>
+
+<div class="adm-main">
+  <div class="adm-topbar">
+    <h1>{% block page_title %}{% endblock %}</h1>
+    {% block topbar_actions %}{% endblock %}
+  </div>
+  <div class="adm-content">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

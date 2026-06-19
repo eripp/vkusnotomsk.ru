@@ -1,0 +1,332 @@
+"""Отправка уведомлений: email, MAX Business API, Telegram Bot."""
+import logging
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from app.models import (
+    Order, OrderItem, OrderStatus, NotificationSettings, User, OtpChannel,
+)
+
+logger = logging.getLogger(__name__)
+
+# ─── Статусы для отображения ──────────────────────────────────────────────────
+
+_STATUS_LABELS = {
+    OrderStatus.new:      "Принят",
+    OrderStatus.accepted: "Подтверждён",
+    OrderStatus.delivery: "В пути",
+    OrderStatus.done:     "Доставлен",
+    OrderStatus.canceled: "Отменён",
+}
+
+_PAYMENT_LABELS = {
+    "online":   "Онлайн",
+    "terminal": "Терминал",
+    "cash":     "Наличные",
+}
+
+
+# ─── OTP ──────────────────────────────────────────────────────────────────────
+
+async def send_otp_code(phone: str, code: str, channel: OtpChannel) -> None:
+    text = f"Ваш код подтверждения Вкусно: {code}"
+    if channel == OtpChannel.tg:
+        logger.info("[OTP/TG] phone=%s code=%s", phone, code)
+        await _send_tg_by_phone(phone, text)
+    else:
+        logger.info("[OTP/MAX] phone=%s code=%s", phone, code)
+        await send_max(phone, text)
+
+
+# ─── Публичные функции уведомлений ────────────────────────────────────────────
+
+async def notify_order_new(db: AsyncSession, order: Order) -> None:
+    """Новый заказ: клиенту + оператору в TG."""
+    items = await _load_items(db, order.id)
+    user  = await _load_user(db, order.user_id) if order.user_id else None
+
+    # Клиенту
+    if user:
+        ns = await _get_ns(db, user.id)
+        text = _order_sms_text(order, items, "Ваш заказ принят!")
+        await _notify_user(user, ns, order, items, "Ваш заказ принят", text)
+
+    # Оператору
+    op_text = _operator_order_text(order, items)
+    await _notify_operator(op_text)
+
+
+async def notify_order_status(db: AsyncSession, order: Order) -> None:
+    """Смена статуса заказа — уведомляем клиента."""
+    if not order.user_id:
+        return
+
+    user = await _load_user(db, order.user_id)
+    if not user:
+        return
+
+    ns    = await _get_ns(db, user.id)
+    items = await _load_items(db, order.id)
+    label = _STATUS_LABELS.get(order.status, order.status.value)
+
+    subject = f"Заказ #{order.id}: {label}"
+    text    = _order_sms_text(order, items, subject)
+    await _notify_user(user, ns, order, items, subject, text)
+
+
+async def notify_order_canceled(db: AsyncSession, order: Order, reason: str = "") -> None:
+    """Отмена заказа."""
+    if not order.user_id:
+        return
+
+    user = await _load_user(db, order.user_id)
+    if not user:
+        return
+
+    ns   = await _get_ns(db, user.id)
+    text = f"Заказ #{order.id} отменён."
+    if reason:
+        text += f" Причина: {reason}"
+
+    if ns.max_orders:
+        await send_max(user.phone, text)
+    if ns.tg_orders and user.tg_chat_id:
+        await send_telegram(user.tg_chat_id, text)
+    if ns.email_orders and user.email:
+        html = _simple_email_html(f"Заказ #{order.id} отменён", text)
+        await send_email(user.email, f"Заказ #{order.id} отменён — Вкусно Томск", html)
+
+
+# ─── Низкоуровневые отправщики ────────────────────────────────────────────────
+
+async def send_email(to: str, subject: str, html: str) -> None:
+    from app.config import settings
+    if not settings.SMTP_USER or not settings.SMTP_PASS:
+        logger.warning("[EMAIL] нет SMTP-настроек, to=%s subject=%s", to, subject)
+        return
+
+    try:
+        import aiosmtplib
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"]    = f"Вкусно Томск <{settings.SMTP_USER}>"
+        msg["To"]      = to
+        msg.attach(MIMEText(html, "html", "utf-8"))
+
+        # Яндекс 465 → SSL; другие порты — STARTTLS
+        use_tls = settings.SMTP_PORT == 465
+
+        await aiosmtplib.send(
+            msg,
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USER,
+            password=settings.SMTP_PASS,
+            use_tls=use_tls,
+            start_tls=not use_tls,
+            timeout=15,
+        )
+        logger.info("[EMAIL] отправлено to=%s subject=%s", to, subject)
+    except Exception as exc:
+        logger.error("[EMAIL] ошибка: %s", exc)
+
+
+async def send_max(phone: str, text: str) -> None:
+    from app.config import settings
+    if not settings.MAX_API_KEY:
+        logger.warning("[MAX] нет ключа → %s: %s", phone, text)
+        return
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "https://api.max.ru/v1/messages",
+                headers={"Authorization": f"Bearer {settings.MAX_API_KEY}"},
+                json={"phone": phone, "text": text},
+            )
+            if resp.status_code >= 400:
+                logger.warning("[MAX] ошибка %s: %s", resp.status_code, resp.text)
+            else:
+                logger.info("[MAX] отправлено %s", phone)
+    except Exception as exc:
+        logger.error("[MAX] исключение: %s", exc)
+
+
+async def send_telegram(chat_id: int, text: str) -> None:
+    from app.config import settings
+    if not settings.TG_BOT_TOKEN:
+        logger.warning("[TG] нет токена, chat_id=%s", chat_id)
+        return
+
+    try:
+        import httpx
+        url = f"https://api.telegram.org/bot{settings.TG_BOT_TOKEN}/sendMessage"
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(url, json={
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+            })
+            if resp.status_code >= 400:
+                logger.warning("[TG] ошибка %s: %s", resp.status_code, resp.text[:200])
+            else:
+                logger.info("[TG] отправлено chat_id=%s", chat_id)
+    except Exception as exc:
+        logger.error("[TG] исключение: %s", exc)
+
+
+# ─── Оператор ─────────────────────────────────────────────────────────────────
+
+async def _notify_operator(text: str) -> None:
+    """Уведомление оператору: TG (из переменной OPERATOR_TG_CHAT_ID)."""
+    from app.config import settings
+    chat_id = getattr(settings, "OPERATOR_TG_CHAT_ID", None)
+    if not chat_id:
+        logger.info("[OP] нет OPERATOR_TG_CHAT_ID: %s", text[:80])
+        return
+    await send_telegram(int(chat_id), text)
+
+
+# ─── Вспомогательные ──────────────────────────────────────────────────────────
+
+async def _notify_user(
+    user: User,
+    ns: NotificationSettings,
+    order: Order,
+    items: list[OrderItem],
+    subject: str,
+    sms_text: str,
+) -> None:
+    if ns.max_orders:
+        await send_max(user.phone, sms_text)
+    if ns.tg_orders and user.tg_chat_id:
+        await send_telegram(user.tg_chat_id, sms_text)
+    if ns.email_orders and user.email:
+        html = _order_email_html(order, items, subject)
+        await send_email(user.email, f"{subject} — Вкусно Томск", html)
+
+
+async def _load_items(db: AsyncSession, order_id: int) -> list[OrderItem]:
+    res = await db.execute(select(OrderItem).where(OrderItem.order_id == order_id))
+    return res.scalars().all()
+
+
+async def _load_user(db: AsyncSession, user_id: int) -> Optional[User]:
+    res = await db.execute(select(User).where(User.id == user_id))
+    return res.scalar_one_or_none()
+
+
+async def _get_ns(db: AsyncSession, user_id: int) -> NotificationSettings:
+    res = await db.execute(
+        select(NotificationSettings).where(NotificationSettings.user_id == user_id)
+    )
+    ns = res.scalar_one_or_none()
+    if not ns:
+        # дефолт: SMS и email включены
+        ns = NotificationSettings(
+            user_id=user_id,
+            email_orders=True,
+            max_orders=True,
+            tg_orders=True,
+        )
+    return ns
+
+
+async def _send_tg_by_phone(phone: str, text: str) -> None:
+    """Telegram по номеру телефона: ищем tg_chat_id в БД."""
+    # Реализация через Telegram login widget — у пользователя должен быть tg_chat_id
+    # Пока логируем; привязка chat_id происходит через Telegram Login Widget (шаг 13+)
+    logger.warning("[TG/PHONE] нет chat_id для %s, текст: %s", phone, text)
+
+
+# ─── Шаблоны текстов ──────────────────────────────────────────────────────────
+
+def _order_sms_text(order: Order, items: list[OrderItem], title: str) -> str:
+    lines = [title, f"Заказ #{order.id}"]
+    for it in items:
+        lines.append(f"• {it.product_name} ×{it.quantity}")
+    lines.append(f"Итого: {order.total_amount} ₽")
+    lines.append(f"Доставка: {order.delivery_date} {order.slot_start}–{order.slot_end}")
+    return "\n".join(lines)
+
+
+def _operator_order_text(order: Order, items: list[OrderItem]) -> str:
+    lines = [f"🛍 <b>Новый заказ #{order.id}</b>"]
+    lines.append(f"📱 {order.phone}")
+    lines.append(f"📍 {order.address}")
+    lines.append(f"🗓 {order.delivery_date} {order.slot_start}–{order.slot_end}")
+    lines.append(f"💳 {_PAYMENT_LABELS.get(order.payment_method.value, order.payment_method.value)}")
+    lines.append("")
+    for it in items:
+        lines.append(f"• {it.product_name} ×{it.quantity} = {it.line_total} ₽")
+    lines.append(f"\n<b>Итого: {order.total_amount} ₽</b>")
+    if order.discount_amount:
+        lines.append(f"Скидка: {order.discount_amount} ₽")
+    if order.cashback_spent:
+        lines.append(f"Бонусы: −{order.cashback_spent} ₽")
+    return "\n".join(lines)
+
+
+def _order_email_html(order: Order, items: list[OrderItem], title: str) -> str:
+    from app.config import settings
+    rows = "".join(
+        f"<tr><td style='padding:4px 8px'>{it.product_name}</td>"
+        f"<td style='padding:4px 8px;text-align:center'>{it.quantity}</td>"
+        f"<td style='padding:4px 8px;text-align:right'>{it.line_total} ₽</td></tr>"
+        for it in items
+    )
+    discount_row = (
+        f"<tr><td colspan='2' style='padding:4px 8px'>Скидка</td>"
+        f"<td style='padding:4px 8px;text-align:right;color:#e53'>−{order.discount_amount} ₽</td></tr>"
+        if order.discount_amount else ""
+    )
+    cashback_row = (
+        f"<tr><td colspan='2' style='padding:4px 8px'>Бонусы</td>"
+        f"<td style='padding:4px 8px;text-align:right;color:#e53'>−{order.cashback_spent} ₽</td></tr>"
+        if order.cashback_spent else ""
+    )
+    return f"""<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>{title}</title></head>
+<body style="font-family:sans-serif;color:#222;max-width:560px;margin:0 auto;padding:20px">
+  <h2 style="color:#ff6b2c">{title}</h2>
+  <p>Заказ <strong>#{order.id}</strong></p>
+  <table width="100%" cellspacing="0" style="border-collapse:collapse;margin:16px 0">
+    <thead>
+      <tr style="background:#f5f5f5">
+        <th style="padding:6px 8px;text-align:left">Товар</th>
+        <th style="padding:6px 8px">Кол-во</th>
+        <th style="padding:6px 8px;text-align:right">Сумма</th>
+      </tr>
+    </thead>
+    <tbody>{rows}</tbody>
+    <tfoot>
+      {discount_row}{cashback_row}
+      <tr style="font-weight:bold">
+        <td colspan="2" style="padding:6px 8px;border-top:1px solid #ddd">Итого</td>
+        <td style="padding:6px 8px;text-align:right;border-top:1px solid #ddd">{order.total_amount} ₽</td>
+      </tr>
+    </tfoot>
+  </table>
+  <p>📍 <strong>Адрес:</strong> {order.address}</p>
+  <p>🗓 <strong>Доставка:</strong> {order.delivery_date}, {order.slot_start}–{order.slot_end}</p>
+  <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+  <p style="color:#888;font-size:13px">Вкусно Томск · <a href="{settings.SITE_URL}" style="color:#ff6b2c">{settings.SITE_URL}</a></p>
+</body></html>"""
+
+
+def _simple_email_html(title: str, body: str) -> str:
+    from app.config import settings
+    return f"""<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>{title}</title></head>
+<body style="font-family:sans-serif;color:#222;max-width:560px;margin:0 auto;padding:20px">
+  <h2 style="color:#ff6b2c">{title}</h2>
+  <p style="white-space:pre-line">{body}</p>
+  <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+  <p style="color:#888;font-size:13px">Вкусно Томск · <a href="{settings.SITE_URL}" style="color:#ff6b2c">{settings.SITE_URL}</a></p>
+</body></html>"""

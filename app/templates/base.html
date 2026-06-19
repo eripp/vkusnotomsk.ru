@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru" prefix="og: https://ogp.me/ns#">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- ── Базовые мета ──────────────────────────────────────────── -->
+  <title>{% block title %}{% if meta_title %}{{ meta_title }}{% else %}Вкусно — доставка еды по Томску{% endif %}{% endblock %}</title>
+  <meta name="description" content="{% block meta_desc %}{% if meta_desc %}{{ meta_desc }}{% else %}Вкусно — доставка домашней еды по Томску. Горячие блюда, салаты, супы с доставкой за 60 минут. Заказывайте онлайн!{% endif %}{% endblock %}">
+  <meta name="robots" content="{% block robots %}index, follow{% endblock %}">
+
+  <!-- ── Canonical ─────────────────────────────────────────────── -->
+  <link rel="canonical" href="{{ SITE_URL }}{% block canonical_path %}{{ request.url.path }}{% endblock %}">
+
+  <!-- ── Open Graph ────────────────────────────────────────────── -->
+  <meta property="og:type"        content="{% block og_type %}website{% endblock %}">
+  <meta property="og:site_name"   content="Вкусно Томск">
+  <meta property="og:locale"      content="ru_RU">
+  <meta property="og:url"         content="{{ SITE_URL }}{{ request.url.path }}">
+  <meta property="og:title"       content="{% block og_title %}{% if meta_title %}{{ meta_title }}{% else %}Вкусно — доставка еды по Томску{% endif %}{% endblock %}">
+  <meta property="og:description" content="{% block og_desc %}{% if meta_desc %}{{ meta_desc }}{% else %}Доставка домашней еды по Томску — быстро и вкусно!{% endif %}{% endblock %}">
+  <meta property="og:image"       content="{% block og_image %}{{ SITE_URL }}/static/img/og-default.jpg{% endblock %}">
+  <meta property="og:image:width"  content="1200">
+  <meta property="og:image:height" content="630">
+
+  <!-- ── Twitter Card ──────────────────────────────────────────── -->
+  <meta name="twitter:card"        content="summary_large_image">
+  <meta name="twitter:title"       content="{% block tw_title %}{% if meta_title %}{{ meta_title }}{% else %}Вкусно — доставка еды по Томску{% endif %}{% endblock %}">
+  <meta name="twitter:description" content="{% block tw_desc %}{% if meta_desc %}{{ meta_desc }}{% else %}Доставка домашней еды по Томску!{% endif %}{% endblock %}">
+  <meta name="twitter:image"       content="{% block tw_image %}{{ SITE_URL }}/static/img/og-default.jpg{% endblock %}">
+
+  <!-- ── Yandex Webmaster ─────────────────────────────────────── -->
+  {% if request.state.site_settings.get('yandex_verification') %}
+  <meta name="yandex-verification" content="{{ request.state.site_settings['yandex_verification'] }}">
+  {% endif %}
+
+  <!-- ── Произвольные скрипты в <head> ────────────────────────── -->
+  {% if request.state.site_settings.get('head_scripts') %}
+  {{ request.state.site_settings['head_scripts'] | safe }}
+  {% endif %}
+
+  <!-- ── JSON-LD: Organization (всегда) ────────────────────────── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FoodEstablishment",
+    "name": "Вкусно",
+    "url": "{{ SITE_URL }}",
+    "logo": "{{ SITE_URL }}/static/img/logo.svg",
+    "image": "{{ SITE_URL }}/static/img/og-default.jpg",
+    "description": "Доставка домашней еды по Томску",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Томск",
+      "addressCountry": "RU"
+    },
+    "areaServed": {
+      "@type": "City",
+      "name": "Томск"
+    },
+    "servesCuisine": "Домашняя кухня",
+    "hasMap": "https://yandex.ru/maps/?text=Томск",
+    "priceRange": "₽₽"
+  }
+  </script>
+
+  {% block structured_data %}{% endblock %}
+
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/static/css/main.css">
+  {% if request.state.site_settings.get('brand_color') %}
+  <style>:root { --brand: {{ request.state.site_settings['brand_color'] }}; }</style>
+  {% endif %}
+  {% block head %}{% endblock %}
+</head>
+<body>
+{% block body %}{% endblock %}
+<script src="/static/js/cart.js"></script>
+<script src="/static/js/main.js"></script>
+{% block scripts %}{% endblock %}
+
+{% set _mid = request.state.site_settings.get('metrika_id', '') %}
+{% if _mid %}
+<!-- Яндекс.Метрика -->
+<script type="text/javascript">
+window.dataLayer = window.dataLayer || [];
+(function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+m[i].l=1*new Date();for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r){return;}}
+k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+(window,document,"script","https://mc.yandex.ru/metrika/tag.js","ym");
+ym({{ _mid }}, "init", {
+  clickmap: true,
+  trackLinks: true,
+  accurateTrackBounce: true,
+  webvisor: {{ 'true' if request.state.site_settings.get('metrika_webvisor') == '1' else 'false' }},
+  ecommerce: {{ '"dataLayer"' if request.state.site_settings.get('metrika_ecom') == '1' else 'false' }}
+});
+</script>
+<noscript><div><img src="https://mc.yandex.ru/watch/{{ _mid }}" style="position:absolute; left:-9999px;" alt=""></div></noscript>
+{% endif %}
+
+{% if request.state.site_settings.get('body_scripts') %}
+{{ request.state.site_settings['body_scripts'] | safe }}
+{% endif %}
+</body>
+</html>

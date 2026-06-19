@@ -1,0 +1,50 @@
+{% extends "admin/base.html" %}
+{% block title %}Дашборд{% endblock %}
+{% block page_title %}Дашборд{% endblock %}
+
+{% block content %}
+<div class="adm-stats">
+  <div class="adm-stat">
+    <div class="adm-stat-val">{{ stats.orders_today }}</div>
+    <div class="adm-stat-label">Заказов сегодня</div>
+  </div>
+  <div class="adm-stat">
+    <div class="adm-stat-val">{{ stats.revenue_today | intcomma }} ₽</div>
+    <div class="adm-stat-label">Выручка сегодня</div>
+  </div>
+  <div class="adm-stat">
+    <div class="adm-stat-val">{{ stats.orders_total }}</div>
+    <div class="adm-stat-label">Заказов всего</div>
+  </div>
+  <div class="adm-stat">
+    <div class="adm-stat-val">{{ stats.users_total }}</div>
+    <div class="adm-stat-label">Пользователей</div>
+  </div>
+</div>
+
+<div class="adm-card">
+  <div class="adm-card-title">Последние заказы</div>
+  <div class="adm-table-wrap">
+    <table class="adm-table">
+      <thead><tr>
+        <th>#</th><th>Клиент</th><th>Адрес</th><th>Дата</th><th>Сумма</th><th>Статус</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for o in recent_orders %}
+      <tr>
+        <td><a href="/admin/orders/{{ o.id }}">#{{ o.id }}</a></td>
+        <td>{{ o.phone }}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ o.address }}</td>
+        <td>{{ o.delivery_date }} {{ o.slot_start.strftime('%H:%M') }}</td>
+        <td>{{ o.total_amount }} ₽</td>
+        <td><span class="badge badge-{{ o.status.value }}">{{ STATUS_LABELS[o.status.value] }}</span></td>
+        <td><a href="/admin/orders/{{ o.id }}" class="btn btn-sm btn-secondary">→</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="color:#aaa;padding:20px;text-align:center">Заказов пока нет</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

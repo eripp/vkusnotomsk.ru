@@ -1,0 +1,189 @@
+{% extends "admin/base.html" %}
+{% block title %}Категории{% endblock %}
+{% block page_title %}Категории{% endblock %}
+{% set active = 'categories' %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" onclick="openModal()">+ Добавить категорию</button>
+{% endblock %}
+
+{% block content %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+
+<div class="adm-card" style="padding:0;overflow:hidden">
+  <div style="padding:12px 16px;background:#fafafa;border-bottom:1px solid #f0f0f0;font-size:12px;color:#888">
+    Перетаскивайте строки для изменения порядка. Изменения сохраняются автоматически.
+  </div>
+  <table class="adm-table" id="cat-table">
+    <thead><tr>
+      <th style="width:32px"></th>
+      <th>Иконка</th><th>Название</th><th>Slug</th><th>Порядок</th><th>Статус</th><th></th>
+    </tr></thead>
+    <tbody id="cat-tbody">
+    {% for c in categories %}
+    <tr draggable="true" data-id="{{ c.id }}" data-order="{{ c.sort_order }}">
+      <td style="cursor:grab;color:#bbb;text-align:center;font-size:18px;user-select:none">⠿</td>
+      <td style="font-size:20px">{% if c.show_icon %}{{ c.icon or '🍴' }}{% else %}<span style="color:#ccc;font-size:12px">— нет —</span>{% endif %}</td>
+      <td><strong>{{ c.name }}</strong></td>
+      <td style="color:#888;font-size:12px">{{ c.slug }}</td>
+      <td style="color:#888">{{ c.sort_order }}</td>
+      <td><span class="badge {% if c.is_visible %}badge-active{% else %}badge-inactive{% endif %}">
+        {% if c.is_visible %}Видима{% else %}Скрыта{% endif %}
+      </span></td>
+      <td>
+        <div class="btn-group">
+          <button class="btn btn-sm btn-secondary" onclick='editCat({{ {"id": c.id, "name": c.name, "slug": c.slug, "icon": c.icon or "", "show_icon": c.show_icon, "sort_order": c.sort_order, "is_visible": c.is_visible} | tojson }})'>✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteCat({{ c.id }}, '{{ c.name }}')">🗑</button>
+        </div>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" style="color:#aaa;padding:24px;text-align:center">Категорий нет</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ─── Drag-and-drop сортировка ─────────────────────────────────────────────────
+const tbody = document.getElementById('cat-tbody');
+let dragRow = null;
+
+tbody.addEventListener('dragstart', e => {
+  dragRow = e.target.closest('tr');
+  dragRow.style.opacity = '.4';
+});
+tbody.addEventListener('dragend', e => {
+  dragRow.style.opacity = '';
+  dragRow = null;
+  saveOrder();
+});
+tbody.addEventListener('dragover', e => {
+  e.preventDefault();
+  const target = e.target.closest('tr');
+  if (!target || target === dragRow) return;
+  const rows = [...tbody.querySelectorAll('tr')];
+  const di = rows.indexOf(dragRow), ti = rows.indexOf(target);
+  if (di < ti) target.after(dragRow);
+  else target.before(dragRow);
+});
+
+async function saveOrder() {
+  const rows = [...tbody.querySelectorAll('tr[data-id]')];
+  const payload = rows.map((r, i) => ({ id: parseInt(r.dataset.id), sort_order: i }));
+  // обновляем отображение порядка
+  rows.forEach((r, i) => { const td = r.querySelectorAll('td')[4]; if (td) td.textContent = i; });
+  await fetch('/admin/categories/reorder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+// ─── CRUD модал ───────────────────────────────────────────────────────────────
+function openModal(data) {
+  document.getElementById('cat-modal').style.display = 'flex';
+  document.getElementById('cm-id').value = data ? data.id : '';
+  document.getElementById('cm-name').value = data ? data.name : '';
+  document.getElementById('cm-slug').value = data ? data.slug : '';
+  document.getElementById('cm-icon').value = data ? (data.icon || '') : '';
+  const showIcon = data ? data.show_icon : true;
+  document.getElementById('cm-show-icon').checked = showIcon;
+  document.getElementById('cm-icon').disabled = !showIcon;
+  document.getElementById('cm-order').value = data ? data.sort_order : 0;
+  document.getElementById('cm-visible').checked = data ? data.is_visible : true;
+  // автогенерация slug при создании
+  document.getElementById('cm-name').oninput = () => {
+    if (!data) autoslug();
+  };
+}
+function closeModal() { document.getElementById('cat-modal').style.display = 'none'; }
+function editCat(data) { openModal(data); }
+
+function autoslug() {
+  const name = document.getElementById('cm-name').value;
+  const slug = name.toLowerCase()
+    .replace(/[аА]/g,'a').replace(/[бБ]/g,'b').replace(/[вВ]/g,'v')
+    .replace(/[гГ]/g,'g').replace(/[дД]/g,'d').replace(/[еЕёЁ]/g,'e')
+    .replace(/[жЖ]/g,'zh').replace(/[зЗ]/g,'z').replace(/[иИ]/g,'i')
+    .replace(/[йЙ]/g,'y').replace(/[кК]/g,'k').replace(/[лЛ]/g,'l')
+    .replace(/[мМ]/g,'m').replace(/[нН]/g,'n').replace(/[оО]/g,'o')
+    .replace(/[пП]/g,'p').replace(/[рР]/g,'r').replace(/[сС]/g,'s')
+    .replace(/[тТ]/g,'t').replace(/[уУ]/g,'u').replace(/[фФ]/g,'f')
+    .replace(/[хХ]/g,'kh').replace(/[цЦ]/g,'ts').replace(/[чЧ]/g,'ch')
+    .replace(/[шШ]/g,'sh').replace(/[щЩ]/g,'shch').replace(/[ъЪьЬ]/g,'')
+    .replace(/[ыЫ]/g,'y').replace(/[эЭ]/g,'e').replace(/[юЮ]/g,'yu')
+    .replace(/[яЯ]/g,'ya').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  document.getElementById('cm-slug').value = slug;
+}
+
+async function saveCat() {
+  const id = document.getElementById('cm-id').value;
+  const body = {
+    name:       document.getElementById('cm-name').value,
+    slug:       document.getElementById('cm-slug').value,
+    icon:       document.getElementById('cm-icon').value || null,
+    show_icon:  document.getElementById('cm-show-icon').checked,
+    sort_order: parseInt(document.getElementById('cm-order').value) || 0,
+    is_visible: document.getElementById('cm-visible').checked,
+  };
+  if (!body.name || !body.slug) { alert('Заполните название и slug'); return; }
+  const url    = id ? `/admin/categories/${id}` : '/admin/categories';
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (res.ok) location.reload();
+  else alert('Ошибка: ' + (await res.json()).detail);
+}
+
+async function deleteCat(id, name) {
+  if (!confirm(`Удалить категорию «${name}»?\nТовары в этой категории не удалятся, но потеряют привязку.`)) return;
+  const res = await fetch(`/admin/categories/${id}`, { method: 'DELETE' });
+  if (res.ok) location.reload();
+  else alert('Ошибка удаления');
+}
+</script>
+
+<div id="cat-modal" class="adm-modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="adm-modal">
+    <h3>Категория</h3>
+    <input type="hidden" id="cm-id">
+    <div class="adm-form">
+      <div class="adm-field-row">
+        <div class="adm-field">
+          <label>Название *</label>
+          <input id="cm-name">
+        </div>
+        <div class="adm-field">
+          <label>Иконка (эмодзи)</label>
+          <input id="cm-icon" placeholder="🍱" maxlength="10">
+          <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px;font-weight:400;font-size:13px">
+            <input type="checkbox" id="cm-show-icon" checked style="width:auto" onchange="document.getElementById('cm-icon').disabled = !this.checked">
+            Показывать эмодзи
+          </label>
+        </div>
+      </div>
+      <div class="adm-field">
+        <label>Slug * <span style="color:#aaa;font-weight:400">— url-адрес (/category/slug)</span></label>
+        <input id="cm-slug" placeholder="goryachie-blyuda">
+      </div>
+      <div class="adm-field-row">
+        <div class="adm-field">
+          <label>Порядок сортировки</label>
+          <input id="cm-order" type="number" min="0" value="0">
+        </div>
+        <div class="adm-field" style="display:flex;align-items:flex-end;padding-bottom:2px">
+          <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin:0">
+            <input type="checkbox" id="cm-visible" checked style="width:auto"> Видима в каталоге
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="btn-group" style="margin-top:18px">
+      <button class="btn btn-primary" onclick="saveCat()">Сохранить</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

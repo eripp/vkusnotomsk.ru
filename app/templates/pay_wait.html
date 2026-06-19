@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Оплата заказа #{{ order.id }} · Вкусно{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+
+{% block body %}
+<header class="header">
+  <div class="header-inner">
+    <a href="/" class="logo"><img src="/static/img/logo.svg" alt="Вкусно — доставка еды по Томску"></a>
+  </div>
+</header>
+
+<div class="pay-wait">
+  <div id="pw-spinner" class="pw-state">
+    <div class="pw-spinner-icon">⏳</div>
+    <h2>Ожидаем подтверждение оплаты</h2>
+    <p class="co-hint">Это займёт несколько секунд…</p>
+  </div>
+
+  <div id="pw-success" class="pw-state" style="display:none">
+    <div class="pw-icon-ok">✅</div>
+    <h2>Оплата прошла!</h2>
+    <p class="co-hint">Заказ #{{ order.id }} принят и передан в работу</p>
+    <a href="/order/{{ order.id }}" class="btn-primary" style="display:inline-block;margin-top:20px">Посмотреть заказ</a>
+  </div>
+
+  <div id="pw-failed" class="pw-state" style="display:none">
+    <div class="pw-icon-fail">❌</div>
+    <h2>Оплата не прошла</h2>
+    <p class="co-hint">Вы можете попробовать снова или выбрать другой способ оплаты</p>
+    <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;flex-wrap:wrap">
+      <a href="/checkout" class="btn-primary">Оформить заново</a>
+      <a href="/order/{{ order.id }}" class="btn-secondary">Детали заказа</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ORDER_ID = {{ order.id }};
+
+async function poll() {
+  try {
+    const res  = await fetch(`/api/payment/status/${ORDER_ID}`);
+    const data = await res.json();
+
+    if (data.payment_status === 'paid') {
+      document.getElementById('pw-spinner').style.display = 'none';
+      document.getElementById('pw-success').style.display = '';
+      return; // прекращаем поллинг
+    }
+
+    if (data.order_status === 'canceled') {
+      document.getElementById('pw-spinner').style.display = 'none';
+      document.getElementById('pw-failed').style.display = '';
+      return;
+    }
+  } catch { /* продолжаем поллинг */ }
+
+  setTimeout(poll, 3000);
+}
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(poll, 2000));
+</script>
+{% endblock %}

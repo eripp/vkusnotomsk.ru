@@ -1,0 +1,119 @@
+{% extends "admin/base.html" %}
+{% block title %}Кешбэк{% endblock %}
+{% block page_title %}Кешбэк{% endblock %}
+{% set active = 'cashback' %}
+
+{% block content %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+
+<!-- Виджеты -->
+<div class="adm-stats">
+  <div class="adm-stat">
+    <div class="adm-stat-val">{{ total_balance | intcomma }} ₽</div>
+    <div class="adm-stat-label">Суммарный баланс клиентов</div>
+  </div>
+  <div class="adm-stat">
+    <div class="adm-stat-val">{{ (stats.get('earn', 0) or 0) | intcomma }} ₽</div>
+    <div class="adm-stat-label">Начислено всего</div>
+  </div>
+  <div class="adm-stat">
+    <div class="adm-stat-val">{{ ((stats.get('spend', 0) or 0) | abs) | intcomma }} ₽</div>
+    <div class="adm-stat-label">Списано всего</div>
+  </div>
+  <div class="adm-stat">
+    <div class="adm-stat-val">{{ ((stats.get('withdraw', 0) or 0) | abs) | intcomma }} ₽</div>
+    <div class="adm-stat-label">Выведено (блогеры)</div>
+  </div>
+</div>
+
+<!-- Форма вывода блогеру -->
+<div class="adm-card" style="margin-bottom:20px">
+  <div class="adm-card-title">Вывод кешбэка блогеру</div>
+  <form method="post" id="withdraw-form" action="">
+    <div class="adm-form" style="max-width:600px">
+      <div class="adm-field-row">
+        <div class="adm-field">
+          <label>ID пользователя</label>
+          <input id="w-user-id" name="user_id_display" type="number" min="1" placeholder="12345" required>
+        </div>
+        <div class="adm-field">
+          <label>Сумма вывода ₽</label>
+          <input name="amount" type="number" min="1" placeholder="1000" required>
+        </div>
+      </div>
+      <div class="adm-field">
+        <label>Комментарий</label>
+        <input name="comment" value="Вывод средств блогеру">
+      </div>
+      <button class="btn btn-primary btn-sm" type="button" onclick="submitWithdraw()">Выполнить вывод</button>
+    </div>
+  </form>
+</div>
+
+<!-- Фильтр + таблица -->
+<div class="adm-card" style="padding:0;overflow:hidden">
+  <div style="padding:12px 16px;border-bottom:1px solid #f0f0f0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <strong style="flex:1">Все транзакции ({{ total_txs }})</strong>
+    <form method="get" style="display:flex;gap:8px;align-items:center">
+      <select name="tx_type" onchange="this.form.submit()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px">
+        <option value="" {% if not tx_type %}selected{% endif %}>Все типы</option>
+        <option value="earn"     {% if tx_type=='earn' %}selected{% endif %}>Начисление</option>
+        <option value="spend"    {% if tx_type=='spend' %}selected{% endif %}>Списание</option>
+        <option value="manual"   {% if tx_type=='manual' %}selected{% endif %}>Ручная</option>
+        <option value="withdraw" {% if tx_type=='withdraw' %}selected{% endif %}>Вывод</option>
+      </select>
+    </form>
+  </div>
+  <div class="adm-table-wrap">
+    <table class="adm-table">
+      <thead><tr>
+        <th>Дата</th><th>Клиент</th><th>Тип</th><th>Сумма</th><th>Заказ</th><th>Комментарий</th>
+      </tr></thead>
+      <tbody>
+      {% for tx in txs %}
+      <tr>
+        <td style="color:#888;font-size:12px;white-space:nowrap">{{ tx.created_at.strftime('%d.%m.%Y %H:%M') if tx.created_at else '—' }}</td>
+        <td>
+          {% if tx.user %}
+          <a href="/admin/users/{{ tx.user.id }}">{{ tx.user.name or tx.user.phone }}</a>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if tx.type.value == 'earn' %}<span class="badge badge-active">+ начисление</span>
+          {% elif tx.type.value == 'spend' %}<span class="badge badge-pending">− списание</span>
+          {% elif tx.type.value == 'manual' %}<span class="badge" style="background:#f0e8ff;color:#8833cc">ручная</span>
+          {% elif tx.type.value == 'withdraw' %}<span class="badge badge-canceled">вывод</span>
+          {% endif %}
+        </td>
+        <td style="font-weight:600;color:{% if tx.amount > 0 %}#1a7a1a{% else %}#c00{% endif %}">
+          {% if tx.amount > 0 %}+{% endif %}{{ tx.amount | intcomma }} ₽
+        </td>
+        <td>{% if tx.order_id %}<a href="/admin/orders/{{ tx.order_id }}">#{{ tx.order_id }}</a>{% else %}—{% endif %}</td>
+        <td style="color:#888;font-size:12px">{{ tx.comment or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" style="color:#aaa;padding:24px;text-align:center">Транзакций нет</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if has_next or page > 1 %}
+  <div class="adm-pagination" style="padding:12px 16px">
+    {% if page > 1 %}<a href="?page={{ page-1 }}&tx_type={{ tx_type }}">← Назад</a>{% endif %}
+    <span class="cur">{{ page }}</span>
+    {% if has_next %}<a href="?page={{ page+1 }}&tx_type={{ tx_type }}">Вперёд →</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function submitWithdraw() {
+  const uid = document.getElementById('w-user-id').value;
+  if (!uid) { alert('Введите ID пользователя'); return; }
+  document.getElementById('withdraw-form').action = `/admin/cashback/withdraw/${uid}`;
+  document.getElementById('withdraw-form').submit();
+}
+</script>
+{% endblock %}

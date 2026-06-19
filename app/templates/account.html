@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+{% block title %}Личный кабинет · Вкусно{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+
+{% block body %}
+<header class="header">
+  <div class="header-inner">
+    <a href="/" class="logo"><img src="/static/img/logo.svg" alt="Вкусно — доставка еды по Томску"></a>
+    <div style="flex:1"></div>
+    <button class="cart-btn" onclick="acct.logout()" style="background:#888">Выйти</button>
+  </div>
+</header>
+
+<!-- auth-wall: если не залогинен -->
+<div id="acct-auth-wall" style="display:none;max-width:420px;margin:100px auto;padding:0 20px">
+  <div class="co-section">
+    <h2 class="co-section-title">Войдите в аккаунт</h2>
+    <p class="co-hint">Укажите номер телефона — пришлём код</p>
+    <div class="co-field">
+      <label>Телефон</label>
+      <input id="aw2-phone" type="tel" placeholder="+7 (999) 000-00-00" autocomplete="tel">
+    </div>
+    <button class="btn-primary" onclick="acctAuth.sendOtp()">Получить код</button>
+    <div id="aw2-otp-block" style="display:none;margin-top:12px">
+      <div class="co-field">
+        <label>Код из сообщения</label>
+        <input id="aw2-code" type="text" placeholder="0000" maxlength="6" inputmode="numeric">
+      </div>
+      <button class="btn-primary" onclick="acctAuth.verifyOtp()">Войти</button>
+    </div>
+    <div id="aw2-error" class="co-error" style="display:none"></div>
+  </div>
+</div>
+
+<!-- основной контент -->
+<div id="acct-content" style="display:none">
+  <div class="acct-layout">
+
+    <!-- Сайдбар -->
+    <aside class="acct-sidebar">
+      <div class="acct-avatar" id="acct-avatar">👤</div>
+      <div class="acct-phone" id="acct-phone"></div>
+      <nav class="acct-nav">
+        <button class="acct-nav-item active" data-tab="orders" onclick="acct.showTab('orders')">📋 Заказы</button>
+        <button class="acct-nav-item" data-tab="profile" onclick="acct.showTab('profile')">✏️ Профиль</button>
+        <button class="acct-nav-item" data-tab="cashback" onclick="acct.showTab('cashback')">💰 Кешбэк</button>
+        <button class="acct-nav-item" data-tab="notifications" onclick="acct.showTab('notifications')">🔔 Уведомления</button>
+      </nav>
+      <button class="acct-logout" onclick="acct.logout()">Выйти</button>
+    </aside>
+
+    <!-- Контент вкладок -->
+    <div class="acct-main">
+
+      <!-- Заказы -->
+      <div id="tab-orders" class="acct-tab">
+        <h2 class="acct-title">Мои заказы</h2>
+        <div id="orders-list"><div class="acct-loading">⏳ Загружаем…</div></div>
+      </div>
+
+      <!-- Профиль -->
+      <div id="tab-profile" class="acct-tab" style="display:none">
+        <h2 class="acct-title">Профиль</h2>
+        <div class="co-section">
+          <div class="co-field">
+            <label>Имя</label>
+            <input id="p-name" type="text" placeholder="Ваше имя">
+          </div>
+          <div class="co-field">
+            <label>Email</label>
+            <input id="p-email" type="email" placeholder="you@example.com">
+          </div>
+          <div class="co-field">
+            <label>Телефон</label>
+            <input id="p-phone" type="tel" disabled style="opacity:.5">
+          </div>
+          <button class="btn-primary" onclick="acct.saveProfile()">Сохранить</button>
+          <div id="p-msg" style="display:none;margin-top:8px;font-size:13px;color:#1a7a1a"></div>
+        </div>
+      </div>
+
+      <!-- Кешбэк -->
+      <div id="tab-cashback" class="acct-tab" style="display:none">
+        <h2 class="acct-title">Кешбэк</h2>
+        <div class="acct-cashback-balance">
+          <span class="acct-cb-val" id="cb-balance">0</span>
+          <span class="acct-cb-label">бонусных рублей</span>
+        </div>
+        <div id="cb-history"><div class="acct-loading">⏳ Загружаем…</div></div>
+      </div>
+
+      <!-- Уведомления -->
+      <div id="tab-notifications" class="acct-tab" style="display:none">
+        <h2 class="acct-title">Уведомления</h2>
+        <div class="co-section">
+          <div class="acct-notif-group">
+            <div class="acct-notif-title">SMS / MAX Business</div>
+            <label class="acct-toggle"><input type="checkbox" id="n-max-orders"><span>Статус заказа</span></label>
+            <label class="acct-toggle"><input type="checkbox" id="n-max-promo"><span>Акции и новинки</span></label>
+          </div>
+          <div class="acct-notif-group">
+            <div class="acct-notif-title">Email</div>
+            <label class="acct-toggle"><input type="checkbox" id="n-email-orders"><span>Статус заказа</span></label>
+            <label class="acct-toggle"><input type="checkbox" id="n-email-promo"><span>Акции и новинки</span></label>
+          </div>
+          <div class="acct-notif-group">
+            <div class="acct-notif-title">Telegram
+              <span id="tg-status" style="font-size:12px;font-weight:400;margin-left:8px;color:#888"></span>
+            </div>
+            <label class="acct-toggle"><input type="checkbox" id="n-tg-orders"><span>Статус заказа</span></label>
+            <label class="acct-toggle"><input type="checkbox" id="n-tg-promo"><span>Акции и новинки</span></label>
+            <div style="margin-top:10px">
+              <button class="btn-secondary" id="tg-link-btn" onclick="acct.linkTelegram()" style="font-size:13px;padding:6px 14px">Привязать Telegram</button>
+              <button class="btn-secondary" id="tg-unlink-btn" onclick="acct.unlinkTelegram()" style="font-size:13px;padding:6px 14px;display:none;background:#888">Отвязать</button>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="acct.saveNotifications()" style="margin-top:16px">Сохранить</button>
+          <div id="n-msg" style="display:none;margin-top:8px;font-size:13px;color:#1a7a1a"></div>
+        </div>
+      </div>
+
+    </div><!-- /acct-main -->
+  </div><!-- /acct-layout -->
+</div><!-- /acct-content -->
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STATUS_LABELS = {
+  new: 'Новый', accepted: 'Принят', delivery: 'В пути', done: 'Выполнен', canceled: 'Отменён'
+};
+const PAY_LABELS = { online: 'Онлайн', terminal: 'Картой курьеру', cash: 'Наличными' };
+const TX_LABELS  = { earn: '+ начислено', spend: '− списано', manual: 'корректировка', withdraw: 'вывод' };
+
+const acct = {
+  _user: null,
+
+  async init() {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (!res.ok) {
+        document.getElementById('acct-auth-wall').style.display = '';
+        return;
+      }
+      this._user = await res.json();
+      localStorage.setItem('vkusno_user', JSON.stringify(this._user));
+    } catch {
+      document.getElementById('acct-auth-wall').style.display = '';
+      return;
+    }
+
+    document.getElementById('acct-content').style.display = '';
+    document.getElementById('acct-phone').textContent = this._user.phone;
+
+    // профиль
+    document.getElementById('p-phone').value = this._user.phone;
+    document.getElementById('p-name').value  = this._user.name  || '';
+    document.getElementById('p-email').value = this._user.email || '';
+
+    this.showTab('orders');
+  },
+
+  showTab(tab) {
+    document.querySelectorAll('.acct-tab').forEach(t => t.style.display = 'none');
+    document.querySelectorAll('.acct-nav-item').forEach(b => b.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).style.display = '';
+    document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+
+    if (tab === 'orders')        this._loadOrders();
+    if (tab === 'cashback')      this._loadCashback();
+    if (tab === 'notifications') this._loadNotifications();
+  },
+
+  async _loadOrders() {
+    const el = document.getElementById('orders-list');
+    try {
+      const res = await fetch('/api/account/orders');
+      const orders = await res.json();
+      if (!orders.length) {
+        el.innerHTML = '<p style="color:#aaa;padding:20px 0">Заказов пока нет</p>';
+        return;
+      }
+      el.innerHTML = orders.map(o => `
+        <div class="acct-order">
+          <div class="acct-order-head">
+            <span class="acct-order-num">#${o.id}</span>
+            <span class="acct-order-status acct-status-${o.status}">${STATUS_LABELS[o.status] || o.status}</span>
+            <span class="acct-order-date">${o.delivery_date} ${o.slot_start}–${o.slot_end}</span>
+            <span class="acct-order-total">${o.total_amount.toLocaleString('ru')} ₽</span>
+          </div>
+          <div class="acct-order-addr">${esc(o.address)}</div>
+          <div class="acct-order-items">
+            ${o.items.map(i => `<span class="acct-order-item">${esc(i.product_name)} ×${i.quantity}</span>`).join('')}
+          </div>
+          <div class="acct-order-pay">${PAY_LABELS[o.payment_method] || o.payment_method}</div>
+        </div>`).join('');
+    } catch {
+      el.innerHTML = '<p class="co-error">Ошибка загрузки</p>';
+    }
+  },
+
+  async _loadCashback() {
+    const el = document.getElementById('cb-history');
+    try {
+      const res  = await fetch('/api/account/cashback');
+      const data = await res.json();
+      document.getElementById('cb-balance').textContent = data.balance.toLocaleString('ru');
+      if (!data.transactions.length) {
+        el.innerHTML = '<p style="color:#aaa;padding:12px 0">Операций пока нет</p>';
+        return;
+      }
+      el.innerHTML = '<div class="acct-cb-list">' +
+        data.transactions.map(t => `
+          <div class="acct-cb-row">
+            <span class="acct-cb-type ${t.type}">${TX_LABELS[t.type] || t.type}</span>
+            <span class="acct-cb-amount ${t.type === 'earn' ? 'pos' : 'neg'}">${t.type === 'earn' ? '+' : '−'}${t.amount} ₽</span>
+            <span class="acct-cb-date">${t.created_at.slice(0,10)}</span>
+          </div>`).join('') +
+        '</div>';
+    } catch {
+      el.innerHTML = '<p class="co-error">Ошибка загрузки</p>';
+    }
+  },
+
+  async _loadNotifications() {
+    try {
+      const res  = await fetch('/api/account/notifications');
+      const data = await res.json();
+      document.getElementById('n-max-orders').checked   = data.max_orders;
+      document.getElementById('n-max-promo').checked    = data.max_promo;
+      document.getElementById('n-email-orders').checked = data.email_orders;
+      document.getElementById('n-email-promo').checked  = data.email_promo;
+      document.getElementById('n-tg-orders').checked    = data.tg_orders;
+      document.getElementById('n-tg-promo').checked     = data.tg_promo;
+
+      // TG-статус
+      const tgLinked = !!this._user?.tg_chat_id;
+      document.getElementById('tg-status').textContent = tgLinked ? '✓ привязан' : 'не привязан';
+      document.getElementById('tg-status').style.color = tgLinked ? '#1a7a1a' : '#888';
+      document.getElementById('tg-link-btn').style.display   = tgLinked ? 'none' : '';
+      document.getElementById('tg-unlink-btn').style.display = tgLinked ? '' : 'none';
+    } catch { /* silent */ }
+  },
+
+  async linkTelegram() {
+    try {
+      const res  = await fetch('/api/account/tg-link', { method: 'POST' });
+      const data = await res.json();
+      if (data.url) {
+        window.open(data.url, '_blank');
+        _showMsg('n-msg', 'Откроется Telegram — нажмите START в боте', '#1a7a1a');
+      } else {
+        _showMsg('n-msg', data.message || 'Бот не настроен', '#d00');
+      }
+    } catch {
+      _showMsg('n-msg', 'Ошибка', '#d00');
+    }
+  },
+
+  async unlinkTelegram() {
+    try {
+      await fetch('/api/account/tg-link', { method: 'DELETE' });
+      this._user.tg_chat_id = null;
+      document.getElementById('tg-status').textContent = 'не привязан';
+      document.getElementById('tg-status').style.color = '#888';
+      document.getElementById('tg-link-btn').style.display   = '';
+      document.getElementById('tg-unlink-btn').style.display = 'none';
+      _showMsg('n-msg', '✓ Telegram отвязан');
+    } catch {
+      _showMsg('n-msg', 'Ошибка', '#d00');
+    }
+  },
+
+  async saveProfile() {
+    const body = {
+      name:  document.getElementById('p-name').value.trim() || null,
+      email: document.getElementById('p-email').value.trim() || null,
+    };
+    try {
+      const res = await fetch('/api/account/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail);
+      const user = await res.json();
+      this._user = user;
+      localStorage.setItem('vkusno_user', JSON.stringify(user));
+      _showMsg('p-msg', '✓ Сохранено');
+    } catch (e) {
+      _showMsg('p-msg', '✗ ' + e.message, '#d00');
+    }
+  },
+
+  async saveNotifications() {
+    const body = {
+      max_orders:   document.getElementById('n-max-orders').checked,
+      max_promo:    document.getElementById('n-max-promo').checked,
+      email_orders: document.getElementById('n-email-orders').checked,
+      email_promo:  document.getElementById('n-email-promo').checked,
+      tg_orders:    document.getElementById('n-tg-orders').checked,
+      tg_promo:     document.getElementById('n-tg-promo').checked,
+    };
+    try {
+      await fetch('/api/account/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      _showMsg('n-msg', '✓ Сохранено');
+    } catch {
+      _showMsg('n-msg', '✗ Ошибка', '#d00');
+    }
+  },
+
+  async logout() {
+    await fetch('/api/account/logout', { method: 'POST' });
+    localStorage.removeItem('vkusno_user');
+    window.location.href = '/';
+  },
+};
+
+// ─── Auth wall для /account ───────────────────────────────────────────────────
+const acctAuth = {
+  _timer: null,
+
+  async sendOtp() {
+    const phone  = document.getElementById('aw2-phone')?.value.trim();
+    const errEl  = document.getElementById('aw2-error');
+    errEl.style.display = 'none';
+    if (!phone) { errEl.textContent = 'Укажите телефон'; errEl.style.display = ''; return; }
+
+    const btn = document.querySelector('#acct-auth-wall .btn-primary');
+    btn.disabled = true; btn.textContent = 'Отправляем…';
+
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, channel: 'max' }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail);
+      document.getElementById('aw2-otp-block').style.display = '';
+      let cd = 60;
+      this._timer = setInterval(() => {
+        cd--;
+        if (cd <= 0) { clearInterval(this._timer); btn.disabled = false; btn.textContent = 'Отправить ещё раз'; }
+        else { btn.textContent = `Повторить через ${cd}с`; }
+      }, 1000);
+    } catch (e) {
+      errEl.textContent = e.message; errEl.style.display = '';
+      btn.disabled = false; btn.textContent = 'Получить код';
+    }
+  },
+
+  async verifyOtp() {
+    const phone = document.getElementById('aw2-phone')?.value.trim();
+    const code  = document.getElementById('aw2-code')?.value.trim();
+    const errEl = document.getElementById('aw2-error');
+    errEl.style.display = 'none';
+    if (!code) { errEl.textContent = 'Введите код'; errEl.style.display = ''; return; }
+
+    const btn = document.querySelector('#aw2-otp-block .btn-primary');
+    btn.disabled = true; btn.textContent = 'Проверяем…';
+
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, code }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail);
+      const data = await res.json();
+      if (data.user) localStorage.setItem('vkusno_user', JSON.stringify(data.user));
+      document.getElementById('acct-auth-wall').style.display = 'none';
+      acct.init();
+    } catch (e) {
+      errEl.textContent = e.message; errEl.style.display = '';
+      btn.disabled = false; btn.textContent = 'Войти';
+    }
+  },
+};
+
+function _showMsg(id, text, color = '#1a7a1a') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = color;
+  el.style.display = '';
+  setTimeout(() => el.style.display = 'none', 3000);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+document.addEventListener('DOMContentLoaded', () => acct.init());
+</script>
+{% endblock %}

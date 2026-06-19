@@ -1,0 +1,99 @@
+{% extends "admin/base.html" %}
+{% block title %}Заказ #{{ order.id }}{% endblock %}
+{% block page_title %}Заказ #{{ order.id }}{% endblock %}
+{% set active = 'orders' %}
+
+{% block topbar_actions %}
+<a href="/admin/orders" class="btn btn-secondary btn-sm">← Список</a>
+{% endblock %}
+
+{% block content %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start">
+
+  <!-- Левая колонка -->
+  <div>
+    <div class="adm-card">
+      <div class="adm-card-title">Состав заказа</div>
+      <div class="adm-table-wrap">
+        <table class="adm-table">
+          <thead><tr><th>Товар</th><th>Цена</th><th>Кол-во</th><th>Сумма</th></tr></thead>
+          <tbody>
+          {% for it in items %}
+          <tr>
+            <td>{{ it.product_name }}</td>
+            <td>{{ it.product_price }} ₽</td>
+            <td>{{ it.quantity }}</td>
+            <td>{{ it.line_total }} ₽</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+          <tfoot>
+            {% if order.discount_amount %}<tr><td colspan="3" style="color:#888">Скидка</td><td style="color:#e53">−{{ order.discount_amount }} ₽</td></tr>{% endif %}
+            {% if order.cashback_spent %}<tr><td colspan="3" style="color:#888">Бонусы</td><td style="color:#e53">−{{ order.cashback_spent }} ₽</td></tr>{% endif %}
+            {% if order.delivery_price %}<tr><td colspan="3" style="color:#888">Доставка</td><td>{{ order.delivery_price }} ₽</td></tr>{% endif %}
+            <tr style="font-weight:700">
+              <td colspan="3" style="border-top:2px solid #f0f0f0">Итого</td>
+              <td style="border-top:2px solid #f0f0f0">{{ order.total_amount }} ₽</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="adm-card">
+      <div class="adm-card-title">Детали</div>
+      <table style="width:100%;border-collapse:collapse">
+        {% set rows = [
+          ('Телефон', order.phone),
+          ('Адрес', order.address),
+          ('Дата доставки', order.delivery_date ~ ' ' ~ order.slot_start.strftime('%H:%M') ~ '–' ~ order.slot_end.strftime('%H:%M')),
+          ('Способ оплаты', PAY_METHOD[order.payment_method.value]),
+          ('Статус оплаты', order.payment_status.value),
+          ('YooKassa ID', order.yookassa_payment_id or '—'),
+          ('Промокод', order.promocode_id or '—'),
+          ('Кешбэк начислен', (order.cashback_earned ~ ' ₽') if order.cashback_earned else '—'),
+          ('Создан', order.created_at.strftime('%d.%m.%Y %H:%M')),
+        ] %}
+        {% for label, val in rows %}
+        <tr>
+          <td style="padding:7px 0;color:#888;width:170px;font-size:13px">{{ label }}</td>
+          <td style="padding:7px 0;font-size:13px">{{ val }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+
+  <!-- Правая колонка: управление статусом -->
+  <div>
+    <div class="adm-card">
+      <div class="adm-card-title">Статус заказа</div>
+      <div style="margin-bottom:14px">
+        <span class="badge badge-{{ order.status.value }}" style="font-size:14px;padding:6px 14px">{{ STATUS_LABELS[order.status.value] }}</span>
+      </div>
+      <form method="post" action="/admin/orders/{{ order.id }}/status">
+        <div class="adm-field" style="margin-bottom:12px">
+          <label>Сменить статус</label>
+          <select name="status">
+            {% for s, label in STATUS_LABELS.items() %}
+            <option value="{{ s }}" {% if s == order.status.value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="adm-field" style="margin-bottom:12px">
+          <label>Причина (для отмены)</label>
+          <input name="cancel_reason" value="{{ order.cancel_reason or '' }}" placeholder="Не заполнять если не отмена">
+        </div>
+        <button class="btn btn-primary" type="submit">Сохранить</button>
+      </form>
+    </div>
+
+    <div class="adm-card">
+      <div class="adm-card-title">Комментарий клиента</div>
+      <p style="color:#555;font-size:13px;line-height:1.5">{{ order.comment or '—' }}</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

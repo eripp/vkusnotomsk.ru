@@ -1,0 +1,821 @@
+{% extends "base.html" %}
+{% block title %}Оформление заказа · Вкусно Томск{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+
+{% block body %}
+<header class="header">
+  <div class="header-inner">
+    <a href="/" class="logo"><img src="/static/img/logo.svg" alt="Вкусно — доставка еды по Томску"></a>
+    <a href="/" class="checkout-back">← Назад в меню</a>
+  </div>
+</header>
+
+<div class="checkout-layout">
+
+  <!-- Левая колонка: форма -->
+  <div class="checkout-form-col">
+
+    <!-- Auth-wall -->
+    <div id="auth-wall" class="co-section" style="display:none">
+      <h2 class="co-section-title">Войдите для оформления</h2>
+      <p class="co-hint">Укажите номер телефона — пришлём код подтверждения</p>
+      <div class="co-field">
+        <label>Телефон</label>
+        <input id="aw-phone" type="tel" placeholder="+7 (999) 000-00-00" autocomplete="tel">
+      </div>
+      <button class="btn-primary" onclick="authWall.sendOtp()">Получить код</button>
+      <div id="aw-otp-block" style="display:none;margin-top:12px">
+        <div class="co-field">
+          <label>Код из сообщения</label>
+          <input id="aw-code" type="text" placeholder="0000" maxlength="6" inputmode="numeric">
+        </div>
+        <button class="btn-primary" onclick="authWall.verifyOtp()">Войти</button>
+      </div>
+      <div id="aw-error" class="co-error" style="display:none"></div>
+    </div>
+
+    <!-- Форма заказа -->
+    <div id="order-form">
+
+      <div class="co-section">
+        <h2 class="co-section-title">Контакты</h2>
+        <div class="co-field">
+          <label for="f-name">Имя</label>
+          <input id="f-name" type="text" placeholder="Как вас зовут?" autocomplete="given-name">
+        </div>
+        <div class="co-field">
+          <label for="f-phone">Телефон</label>
+          <input id="f-phone" type="tel" placeholder="+7 (999) 000-00-00" autocomplete="tel">
+        </div>
+      </div>
+
+      <div class="co-section">
+        <h2 class="co-section-title">Способ получения</h2>
+        <div class="co-tabs" id="delivery-tabs">
+          <button class="co-tab active" data-mode="delivery" onclick="checkout.setMode('delivery')">🚚 Доставка</button>
+          <button class="co-tab" data-mode="pickup" onclick="checkout.setMode('pickup')">🏠 Самовывоз</button>
+        </div>
+
+        <div id="delivery-block">
+          <div id="delivery-map"></div>
+          <div id="map-zone-hint" class="co-zone-info" style="display:none"></div>
+          <div class="co-field co-autocomplete">
+            <label for="f-street">Улица</label>
+            <input id="f-street" type="text" placeholder="Начните вводить адрес…" autocomplete="off">
+            <ul id="addr-suggest" class="co-suggest" style="display:none"></ul>
+          </div>
+          <div class="co-fields-row co-address-row">
+            <div class="co-field">
+              <label for="f-house">Дом</label>
+              <input id="f-house" type="text" placeholder="12" autocomplete="off">
+            </div>
+            <div class="co-field">
+              <label for="f-apt">Квартира</label>
+              <input id="f-apt" type="text" placeholder="34" autocomplete="off">
+            </div>
+            <div class="co-field">
+              <label for="f-floor">Этаж</label>
+              <input id="f-floor" type="text" placeholder="3" autocomplete="off">
+            </div>
+            <div class="co-field">
+              <label for="f-entrance">Подъезд</label>
+              <input id="f-entrance" type="text" placeholder="2" autocomplete="off">
+            </div>
+          </div>
+          <div id="zone-info" class="co-zone-info" style="display:none"></div>
+        </div>
+
+        <div id="pickup-block" style="display:none">
+          <div class="co-pickup-address">
+            <strong>Адрес самовывоза:</strong><br>
+            г. Томск, ул. Учебная, 48<br>
+            <span class="co-hint">Пн–Вс, 10:00–21:00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="co-section">
+        <h2 class="co-section-title">Время доставки</h2>
+        <div class="co-fields-row">
+          <div class="co-field">
+            <label for="f-date">Дата</label>
+            <input id="f-date" type="date">
+          </div>
+          <div class="co-field">
+            <label for="f-slot">Время</label>
+            <select id="f-slot">
+              <option value="">— выберите —</option>
+            </select>
+          </div>
+        </div>
+        <div id="schedule-error" class="co-error" style="display:none">На выбранную дату доставка недоступна</div>
+      </div>
+
+      <div class="co-section">
+        <h2 class="co-section-title">Оплата</h2>
+        <div class="co-payment-options" id="payment-options">
+          <label class="co-pay-opt">
+            <input type="radio" name="payment" value="online" checked>
+            <span class="co-pay-label">💳 Онлайн (карта)</span>
+          </label>
+          <label class="co-pay-opt">
+            <input type="radio" name="payment" value="terminal">
+            <span class="co-pay-label">📱 Картой курьеру</span>
+          </label>
+          <label class="co-pay-opt">
+            <input type="radio" name="payment" value="cash">
+            <span class="co-pay-label">💵 Наличными</span>
+          </label>
+        </div>
+        <div id="cash-change-block" style="display:none" class="co-field" style="margin-top:8px">
+          <label for="f-change">Сдача с</label>
+          <input id="f-change" type="number" placeholder="1000" min="0" step="100">
+        </div>
+      </div>
+
+      <div class="co-section">
+        <h2 class="co-section-title">Скидки и бонусы</h2>
+        <div class="co-field">
+          <label for="f-promo">Промокод</label>
+          <div class="co-promo-row">
+            <input id="f-promo" type="text" placeholder="ВКУСНО2026" autocomplete="off" style="text-transform:uppercase">
+            <button class="co-promo-apply" onclick="checkout.applyPromo()">Применить</button>
+          </div>
+          <div id="promo-result" style="display:none;margin-top:6px;font-size:13px"></div>
+        </div>
+        <div id="cashback-block" style="display:none">
+          <div class="co-field" style="margin-top:4px">
+            <label for="f-cashback">Списать бонусы (доступно: <span id="cb-available">0</span> ₽)</label>
+            <div class="co-promo-row">
+              <input id="f-cashback" type="number" placeholder="0" min="0" step="50">
+              <button class="co-promo-apply" onclick="checkout.applyCashback()">Применить</button>
+            </div>
+            <div id="cashback-result" style="display:none;margin-top:6px;font-size:13px;color:#1a7a1a"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="co-section">
+        <h2 class="co-section-title">Комментарий</h2>
+        <div class="co-field">
+          <textarea id="f-comment" rows="3" placeholder="Не звонить в дверь, оставить у двери…"></textarea>
+        </div>
+      </div>
+
+      <div id="submit-error" class="co-error" style="display:none"></div>
+      <button class="btn-primary btn-block" id="submit-btn" onclick="checkout.submit()">
+        Оформить заказ
+      </button>
+
+    </div><!-- /order-form -->
+
+  </div><!-- /checkout-form-col -->
+
+  <!-- Правая колонка: состав заказа -->
+  <div class="checkout-summary-col">
+    <div class="co-summary">
+      <h2 class="co-section-title">Ваш заказ</h2>
+      <div id="summary-items"></div>
+      <div id="summary-empty" class="co-empty">
+        <p>Корзина пуста — <a href="/">вернитесь в меню</a></p>
+      </div>
+      <div id="summary-totals" style="display:none">
+        <div class="co-summary-row"><span>Товары</span><span id="s-subtotal"></span></div>
+        <div class="co-summary-row" id="s-delivery-row"><span>Доставка</span><span id="s-delivery"></span></div>
+        <div class="co-summary-row co-summary-total"><span>Итого</span><span id="s-total"></span></div>
+        <div id="s-min-warn" class="co-warn" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /checkout-layout -->
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MIN_ORDER = 500;
+
+const checkout = {
+  mode: 'delivery',
+  deliveryPrice: 0,
+  slots: [],
+  _promoCode: null,
+  _promoDiscount: 0,
+  _cashbackSpend: 0,
+
+  init() {
+    this._renderSummary();
+    this._initDate();          // подгружает доступные дни и слоты
+    this._initPaymentToggle();
+    this._initAddressAutocomplete();
+    this._prefillUser();
+    this._loadCashbackBalance();
+  },
+
+  // ─── Автодополнение адреса (Dadata) ──────────────────────────────────────
+  _initAddressAutocomplete() {
+    const inp  = document.getElementById('f-street');
+    const list = document.getElementById('addr-suggest');
+    if (!inp || !list) return;
+    let timer = null;
+
+    const hide = () => { list.style.display = 'none'; list.innerHTML = ''; };
+
+    inp.addEventListener('input', () => {
+      clearTimeout(timer);
+      const q = inp.value.trim();
+      if (q.length < 3) { hide(); return; }
+      timer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/address/suggest?q=${encodeURIComponent(q)}`);
+          const { suggestions } = await res.json();
+          if (!suggestions || !suggestions.length) { hide(); return; }
+          list.innerHTML = suggestions.map((s, i) =>
+            `<li data-i="${i}">${esc(s.value)}</li>`).join('');
+          list.style.display = '';
+          this._suggestions = suggestions;
+        } catch { hide(); }
+      }, 300);
+    });
+
+    list.addEventListener('click', e => {
+      const li = e.target.closest('li');
+      if (!li) return;
+      const s = this._suggestions?.[parseInt(li.dataset.i)];
+      if (s) this._applySuggestion(s);
+      hide();
+    });
+
+    // закрытие по клику вне
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.co-autocomplete')) hide();
+    });
+  },
+
+  _applySuggestion(s) {
+    document.getElementById('f-street').value = s.street || s.value || '';
+    if (s.house) document.getElementById('f-house').value = s.house;
+    if (s.lat != null && s.lon != null) {
+      deliveryMap.setPoint(s.lat, s.lon);   // маркер + определение зоны
+    }
+  },
+
+  async _loadCashbackBalance() {
+    try {
+      const res = await fetch('/api/cashback/balance');
+      if (!res.ok) return;
+      const { balance } = await res.json();
+      if (balance > 0) {
+        document.getElementById('cashback-block').style.display = '';
+        document.getElementById('cb-available').textContent = balance.toLocaleString('ru');
+      }
+    } catch { /* не авторизован */ }
+  },
+
+  async applyPromo() {
+    const code = document.getElementById('f-promo')?.value.trim().toUpperCase();
+    const res_el = document.getElementById('promo-result');
+    res_el.style.display = 'none';
+    if (!code) return;
+
+    try {
+      const res = await fetch('/api/promocode/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, subtotal: cart.total }),
+      });
+      const data = await res.json();
+      res_el.style.display = '';
+      if (data.valid) {
+        this._promoCode = code;
+        this._promoDiscount = data.discount || 0;
+        res_el.style.color = '#1a7a1a';
+        res_el.textContent = '✓ ' + data.message;
+      } else {
+        this._promoCode = null;
+        this._promoDiscount = 0;
+        res_el.style.color = '#d00';
+        res_el.textContent = '✗ ' + data.message;
+      }
+    } catch {
+      res_el.style.display = '';
+      res_el.style.color = '#d00';
+      res_el.textContent = '✗ Ошибка проверки промокода';
+    }
+    this._updateTotals();
+  },
+
+  applyCashback() {
+    const val = parseInt(document.getElementById('f-cashback')?.value) || 0;
+    const avail = parseInt(document.getElementById('cb-available')?.textContent.replace(/\s/g,'')) || 0;
+    this._cashbackSpend = Math.min(val, avail, cart.total - this._promoDiscount);
+    const el = document.getElementById('cashback-result');
+    el.style.display = '';
+    el.textContent = `✓ Будет списано ${this._cashbackSpend} ₽`;
+    this._updateTotals();
+  },
+
+  setMode(m) {
+    this.mode = m;
+    document.querySelectorAll('.co-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === m));
+    document.getElementById('delivery-block').style.display = m === 'delivery' ? '' : 'none';
+    document.getElementById('pickup-block').style.display  = m === 'pickup'   ? '' : 'none';
+    const delivRow = document.getElementById('s-delivery-row');
+    if (delivRow) delivRow.style.display = m === 'delivery' ? '' : 'none';
+    this._updateTotals();
+  },
+
+  _prefillUser() {
+    const u = _getUser();
+    if (!u) return;
+    const ph = document.getElementById('f-phone');
+    if (ph && u.phone) ph.value = u.phone;
+    const nm = document.getElementById('f-name');
+    if (nm && u.name) nm.value = u.name;
+  },
+
+  _renderSummary() {
+    const items = cart.items;
+    const el = document.getElementById('summary-items');
+    const empty = document.getElementById('summary-empty');
+    const totals = document.getElementById('summary-totals');
+
+    if (!items.length) {
+      el.innerHTML = '';
+      empty.style.display = '';
+      totals.style.display = 'none';
+      return;
+    }
+    empty.style.display = 'none';
+    totals.style.display = '';
+
+    el.innerHTML = items.map(i => `
+      <div class="co-item">
+        <span class="co-item-name">${esc(i.name)}</span>
+        <span class="co-item-qty">× ${i.qty}</span>
+        <span class="co-item-price">${(i.price * i.qty).toLocaleString('ru')} ₽</span>
+      </div>`).join('');
+
+    this._updateTotals();
+  },
+
+  _updateTotals() {
+    const subtotal  = cart.total;
+    const delivery  = this.mode === 'delivery' ? this.deliveryPrice : 0;
+    const discount  = this._promoDiscount;
+    const cashback  = this._cashbackSpend;
+    const total     = Math.max(1, subtotal - discount - cashback + delivery);
+
+    const fmt = n => n.toLocaleString('ru') + ' ₽';
+    _setText('s-subtotal', fmt(subtotal));
+    _setText('s-delivery', this.deliveryPrice === 0 && this.mode === 'delivery' ? 'Бесплатно' : fmt(delivery));
+
+    // строки скидки и кешбэка в итого
+    let discountRow = document.getElementById('s-discount-row');
+    let cashbackRow = document.getElementById('s-cashback-row');
+
+    if (discount > 0) {
+      if (!discountRow) {
+        discountRow = _insertSummaryRow('s-discount-row', 'Скидка', 's-total');
+      }
+      discountRow.querySelector('.s-val').textContent = '−' + fmt(discount);
+      discountRow.style.display = '';
+    } else if (discountRow) {
+      discountRow.style.display = 'none';
+    }
+
+    if (cashback > 0) {
+      if (!cashbackRow) {
+        cashbackRow = _insertSummaryRow('s-cashback-row', 'Бонусы', 's-total');
+      }
+      cashbackRow.querySelector('.s-val').textContent = '−' + fmt(cashback);
+      cashbackRow.style.display = '';
+    } else if (cashbackRow) {
+      cashbackRow.style.display = 'none';
+    }
+
+    _setText('s-total', fmt(total));
+
+    const warn = document.getElementById('s-min-warn');
+    if (warn) {
+      if (subtotal < MIN_ORDER) {
+        warn.style.display = '';
+        warn.textContent = `Минимальная сумма заказа ${MIN_ORDER} ₽. Не хватает ${MIN_ORDER - subtotal} ₽`;
+      } else {
+        warn.style.display = 'none';
+      }
+    }
+  },
+
+  async _initDate() {
+    const inp = document.getElementById('f-date');
+    if (!inp) return;
+    const errEl = document.getElementById('schedule-error');
+
+    // доступные дни из расписания (ТЗ: день без слотов не выбирается)
+    this.availableDays = [];
+    try {
+      const res = await fetch('/api/schedule/available-days');
+      const data = await res.json();
+      this.availableDays = (data.days || []).filter(d => d.has_slots).map(d => d.date);
+    } catch { /* оставим пусто — покажем сообщение ниже */ }
+
+    if (!this.availableDays.length) {
+      inp.disabled = true;
+      if (errEl) { errEl.textContent = 'Доставка временно недоступна'; errEl.style.display = ''; }
+      return;
+    }
+
+    inp.min = this.availableDays[0];
+    inp.max = this.availableDays[this.availableDays.length - 1];
+    inp.value = this.availableDays[0];
+    inp.addEventListener('change', () => {
+      if (!this.availableDays.includes(inp.value)) {
+        if (errEl) { errEl.textContent = 'На выбранную дату доставка недоступна'; errEl.style.display = ''; }
+        document.getElementById('f-slot').innerHTML = '<option value="">Нет доступных слотов</option>';
+        return;
+      }
+      this._loadSlots();
+    });
+    this._loadSlots();
+  },
+
+  async _loadSlots() {
+    const dateVal = document.getElementById('f-date')?.value;
+    if (!dateVal) return;
+    try {
+      const res = await fetch(`/api/schedule/slots?date=${dateVal}`);
+      const data = await res.json();
+      this.slots = data.slots || [];
+      const sel = document.getElementById('f-slot');
+      if (!sel) return;
+      if (!this.slots.length) {
+        sel.innerHTML = '<option value="">Нет доступных слотов</option>';
+        document.getElementById('schedule-error').style.display = '';
+      } else {
+        document.getElementById('schedule-error').style.display = 'none';
+        sel.innerHTML = '<option value="">— выберите —</option>' +
+          this.slots.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+      }
+    } catch {
+      const sel = document.getElementById('f-slot');
+      if (sel) sel.innerHTML = '<option value="">Нет доступных слотов</option>';
+      document.getElementById('schedule-error').style.display = '';
+    }
+  },
+
+  _initPaymentToggle() {
+    document.querySelectorAll('input[name="payment"]').forEach(r => {
+      r.addEventListener('change', () => {
+        document.getElementById('cash-change-block').style.display =
+          r.value === 'cash' && r.checked ? '' : 'none';
+      });
+    });
+  },
+
+  _getPayment() {
+    return document.querySelector('input[name="payment"]:checked')?.value || 'online';
+  },
+
+  _buildAddress() {
+    if (this.mode === 'pickup') return 'Самовывоз: г. Томск, ул. Учебная, 48';
+    const street   = document.getElementById('f-street')?.value.trim()   || '';
+    const house    = document.getElementById('f-house')?.value.trim()    || '';
+    const apt      = document.getElementById('f-apt')?.value.trim()      || '';
+    const floor    = document.getElementById('f-floor')?.value.trim()    || '';
+    const entrance = document.getElementById('f-entrance')?.value.trim() || '';
+    const parts = [`ул. ${street}`, `д. ${house}`];
+    if (apt)      parts.push(`кв. ${apt}`);
+    if (floor)    parts.push(`этаж ${floor}`);
+    if (entrance) parts.push(`подъезд ${entrance}`);
+    return parts.join(', ');
+  },
+
+  _validate() {
+    const errs = [];
+    if (!document.getElementById('f-name')?.value.trim())  errs.push('Укажите имя');
+    const phone = document.getElementById('f-phone')?.value.trim();
+    if (!phone) errs.push('Укажите телефон');
+    if (this.mode === 'delivery') {
+      if (!document.getElementById('f-street')?.value.trim()) errs.push('Укажите улицу');
+      if (!document.getElementById('f-house')?.value.trim())  errs.push('Укажите дом');
+    }
+    if (!document.getElementById('f-date')?.value)  errs.push('Выберите дату');
+    if (!document.getElementById('f-slot')?.value)  errs.push('Выберите время доставки');
+    if (cart.total < MIN_ORDER) errs.push(`Минимальная сумма заказа ${MIN_ORDER} ₽`);
+    if (!cart.items.length)    errs.push('Корзина пуста');
+    return errs;
+  },
+
+  async submit() {
+    const errEl = document.getElementById('submit-error');
+    errEl.style.display = 'none';
+
+    const errs = this._validate();
+    if (errs.length) {
+      errEl.textContent = errs[0];
+      errEl.style.display = '';
+      return;
+    }
+
+    // Перепроверяем доступность товаров корзины на сервере: товар мог стать
+    // неактивным после добавления в корзину.
+    try {
+      const vRes = await fetch('/api/cart/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: cart.items.map(i => i.id) }),
+      });
+      const vData = await vRes.json();
+      if (vRes.ok && vData.unavailable && vData.unavailable.length) {
+        const names = cart.items
+          .filter(i => vData.unavailable.includes(i.id))
+          .map(i => i.name);
+        vData.unavailable.forEach(id => cart.remove(id));
+        errEl.textContent = 'Товар отсутствует и был убран из корзины: ' + names.join(', ');
+        errEl.style.display = '';
+        return;
+      }
+    } catch (e) { /* если проверка недоступна — не блокируем оформление */ }
+
+    const slotEl = document.getElementById('f-slot');
+    const slotVal = slotEl?.value || '';
+    // парсим время из label если значение — id демо-слота
+    let slotStart = '10:00', slotEnd = '12:00';
+    const slotText = slotEl?.options[slotEl.selectedIndex]?.text || '';
+    const m = slotText.match(/(\d{2}:\d{2})\s*[–-]\s*(\d{2}:\d{2})/);
+    if (m) { slotStart = m[1]; slotEnd = m[2]; }
+
+    const body = {
+      name:            document.getElementById('f-name').value.trim(),
+      phone:           document.getElementById('f-phone').value.trim(),
+      address:         this._buildAddress(),
+      delivery_mode:   this.mode,
+      delivery_date:   document.getElementById('f-date').value,
+      slot_start:      slotStart,
+      slot_end:        slotEnd,
+      schedule_entry_id: isNaN(parseInt(slotVal)) ? null : parseInt(slotVal),
+      payment_method:  this._getPayment(),
+      cash_change_from: this._getPayment() === 'cash'
+        ? (parseInt(document.getElementById('f-change')?.value) || null)
+        : null,
+      comment:         document.getElementById('f-comment')?.value.trim() || '',
+      promocode:       this._promoCode || null,
+      cashback_spend:  this._cashbackSpend || 0,
+      items: cart.items.map(i => ({ product_id: i.id, quantity: i.qty, price: i.price })),
+    };
+
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Отправляем…';
+
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Ошибка сервера');
+
+      if (data.payment_url) {
+        // онлайн-оплата — редирект на YooKassa
+        cart._save([]);
+        window.location.href = data.payment_url;
+      } else {
+        // наличные / терминал — страница подтверждения
+        cart._save([]);
+        window.location.href = `/order/${data.order_id}`;
+      }
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.style.display = '';
+      btn.disabled = false;
+      btn.textContent = 'Оформить заказ';
+    }
+  },
+};
+
+// ─── Auth wall (OTP) ─────────────────────────────────────────────────────────
+const authWall = {
+  _timer: null,
+  _countdown: 0,
+
+  async sendOtp() {
+    const phone = document.getElementById('aw-phone')?.value.trim();
+    const errEl = document.getElementById('aw-error');
+    errEl.style.display = 'none';
+    if (!phone) { _awErr('Укажите телефон'); return; }
+
+    const btn = document.querySelector('#auth-wall .btn-primary');
+    btn.disabled = true; btn.textContent = 'Отправляем…';
+
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, channel: 'max' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Ошибка');
+
+      document.getElementById('aw-otp-block').style.display = '';
+      // префиллим телефон в форму заказа
+      const fp = document.getElementById('f-phone');
+      if (fp) fp.value = phone;
+
+      // кнопка повтора через 60 сек
+      this._startCountdown(btn, 60);
+    } catch (e) {
+      _awErr(e.message);
+      btn.disabled = false; btn.textContent = 'Получить код';
+    }
+  },
+
+  async verifyOtp() {
+    const phone = document.getElementById('aw-phone')?.value.trim();
+    const code  = document.getElementById('aw-code')?.value.trim();
+    const errEl = document.getElementById('aw-error');
+    errEl.style.display = 'none';
+    if (!code) { _awErr('Введите код'); return; }
+
+    const btn = document.querySelector('#aw-otp-block .btn-primary');
+    btn.disabled = true; btn.textContent = 'Проверяем…';
+
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Ошибка');
+
+      // сохраняем профиль в localStorage
+      if (data.user) localStorage.setItem('vkusno_user', JSON.stringify(data.user));
+
+      document.getElementById('auth-wall').style.display = 'none';
+      document.getElementById('order-form').style.display = '';
+      checkout._prefillUser();
+    } catch (e) {
+      _awErr(e.message);
+      btn.disabled = false; btn.textContent = 'Войти';
+    }
+  },
+
+  _startCountdown(btn, sec) {
+    this._countdown = sec;
+    clearInterval(this._timer);
+    btn.disabled = true;
+    btn.textContent = `Повторить через ${sec}с`;
+    this._timer = setInterval(() => {
+      this._countdown--;
+      if (this._countdown <= 0) {
+        clearInterval(this._timer);
+        btn.disabled = false;
+        btn.textContent = 'Отправить ещё раз';
+      } else {
+        btn.textContent = `Повторить через ${this._countdown}с`;
+      }
+    }, 1000);
+  },
+};
+
+function _awErr(msg) {
+  const el = document.getElementById('aw-error');
+  el.textContent = msg; el.style.display = '';
+}
+
+function _getUser() {
+  try { return JSON.parse(localStorage.getItem('vkusno_user') || 'null'); } catch { return null; }
+}
+function _setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+function _insertSummaryRow(id, label, beforeId) {
+  const before = document.getElementById(beforeId)?.closest('.co-summary-row');
+  const row = document.createElement('div');
+  row.id = id;
+  row.className = 'co-summary-row';
+  row.innerHTML = `<span>${label}</span><span class="s-val"></span>`;
+  if (before) before.parentNode.insertBefore(row, before);
+  return row;
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Оформление доступно без авторизации (бэкенд принимает гостевые заказы).
+  // Auth-wall временно отключён, пока авторизация не работает — форму показываем всегда.
+  // Если пользователь всё же авторизован, подтянем его профиль для префилла.
+  document.getElementById('auth-wall').style.display = 'none';
+  document.getElementById('order-form').style.display = '';
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      const user = await res.json();
+      localStorage.setItem('vkusno_user', JSON.stringify(user));
+    }
+  } catch { /* не авторизован — оформляем как гость */ }
+  checkout.init();
+  deliveryMap.init();
+});
+
+// ─── Карта Leaflet ────────────────────────────────────────────────────────────
+const deliveryMap = {
+  map: null,
+  marker: null,
+  zoneLayerGroup: null,
+  _lat: null,
+  _lon: null,
+
+  init() {
+    const el = document.getElementById('delivery-map');
+    if (!el || typeof L === 'undefined') return;
+
+    // центр Томска
+    this.map = L.map('delivery-map', { zoomControl: true }).setView([56.4977, 84.9744], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 18,
+    }).addTo(this.map);
+
+    this.zoneLayerGroup = L.layerGroup().addTo(this.map);
+    this._loadZones();
+
+    this.map.on('click', e => this._onMapClick(e.latlng.lat, e.latlng.lng));
+  },
+
+  async _loadZones() {
+    try {
+      const res = await fetch('/api/zones');
+      const zones = await res.json();
+      zones.forEach(z => {
+        L.geoJSON(z.polygon, {
+          style: { color: z.color, weight: 2, fillOpacity: 0.1 },
+        })
+          .bindTooltip(`${z.name} — доставка ${z.delivery_price === 0 ? 'бесплатно' : z.delivery_price + ' ₽'}`)
+          .addTo(this.zoneLayerGroup);
+      });
+    } catch { /* нет зон — не критично */ }
+  },
+
+  // Ставит маркер, центрирует карту и определяет зону. Вызывается из карты и автокомплита.
+  setPoint(lat, lon, recenter = true) {
+    this._lat = lat;
+    this._lon = lon;
+    if (this.marker) this.marker.remove();
+    this.marker = L.marker([lat, lon]).addTo(this.map);
+    if (recenter && this.map) this.map.setView([lat, lon], Math.max(this.map.getZoom(), 16));
+    this._detectZone(lat, lon);
+  },
+
+  async _detectZone(lat, lon) {
+    const hint = document.getElementById('map-zone-hint');
+    try {
+      const res = await fetch(`/api/address/detect-zone?lat=${lat}&lon=${lon}`);
+      const data = await res.json();
+      if (data.zone) {
+        const free = data.free_delivery_from;
+        const dp   = data.delivery_price;
+        hint.style.display = '';
+        hint.style.color = '#155a1e';
+        hint.style.background = '#efffef';
+        hint.textContent = `✓ ${data.zone.name}: доставка ${dp === 0 ? 'бесплатно' : dp + ' ₽'}` +
+          (free ? ` (бесплатно от ${free} ₽)` : '');
+        checkout.deliveryPrice = dp;
+      } else {
+        hint.style.display = '';
+        hint.style.color = '#8b1a1a';
+        hint.style.background = '#fff0f0';
+        hint.textContent = '✗ Адрес вне зоны доставки. Выберите другую точку или самовывоз.';
+        checkout.deliveryPrice = 0;
+      }
+      checkout._updateTotals();
+    } catch { /* silent */ }
+  },
+
+  // Клик по карте: ставим точку + обратное геокодирование → заполняем поля адреса.
+  async _onMapClick(lat, lon) {
+    this.setPoint(lat, lon, false);
+    try {
+      const res = await fetch(`/api/address/geocode?lat=${lat}&lon=${lon}`);
+      const { address } = await res.json();
+      if (address) {
+        if (address.street) document.getElementById('f-street').value = address.street;
+        if (address.house)  document.getElementById('f-house').value  = address.house;
+      }
+    } catch { /* геокодер недоступен — точка всё равно поставлена */ }
+  },
+};
+</script>
+{% endblock %}

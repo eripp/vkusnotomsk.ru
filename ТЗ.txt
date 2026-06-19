@@ -1,0 +1,963 @@
+⚡ Вкусно · ТЗ
+Проект
+Стек технологий
+Архитектура
+Схема БД
+Клиентская часть
+Каталог и поиск
+Карточка товара
+Варианты / группы
+Корзина
+Оформление заказа
+Расписание доставки
+Авторизация
+Личный кабинет
+Бизнес-логика
+Зоны доставки
+Оплата ЮКасса
+Промокоды и кешбэк
+Жизненный цикл заказа
+Уведомления
+Сторис
+Админ-панель
+Структура и разделы
+SEO
+Метрики и аналитика
+Инфраструктура
+Docker и сервисы
+Порядок реализации
+Техническое задание
+Вкусно · Интернет-магазин готовой еды с доставкой · г. Томск · Версия 1.0
+1
+Стек технологий — минимум фреймворков, максимум нативного кода
+Backend
+Python 3.12 + FastAPI
+Uvicorn, Pydantic v2, SQLAlchemy 2.0
+
+База данных
+PostgreSQL 16
+Alembic для миграций
+
+Frontend
+Нативный HTML + CSS + Vanilla JS
+Без React/Vue/Angular. Минимум зависимостей.
+
+Шаблоны
+Jinja2 (SSR)
+FastAPI встроенная поддержка. Fetch/AJAX для динамики.
+
+Карты и геокодинг
+Leaflet.js + OSM
+Dadata API — поиск адресов и геокодинг. Shapely — point-in-polygon.
+
+Инфраструктура
+Docker + Docker Compose
+Nginx как reverse proxy. Ubuntu 24.04 LTS на Timeweb VPS.
+
+Оплата
+ЮКасса (YooKassa SDK)
+Webhook для подтверждения оплаты
+
+Уведомления
+SMTP (email) · MAX Business API · Telegram Bot API
+python-telegram-bot или httpx напрямую
+
+Хранение файлов
+Локальная файловая система
+/media/ на VPS. Nginx отдаёт статику напрямую.
+
+Принцип: не подключать библиотеку если задача решается 10 строками нативного кода. Jinja2 вместо SPA. Fetch вместо axios. Нативный CSS без Tailwind/Bootstrap.
+2
+Архитектура — Docker-сервисы
+:8000
+web — FastAPI приложение
+Основное приложение: рендер страниц (SSR Jinja2), REST API для фронта, бизнес-логика. Точка входа: uvicorn main:app
+
+:5432
+db — PostgreSQL 16
+База данных. Volume для персистентности данных. Доступна только внутри Docker-сети.
+
+:80 / :443
+nginx — Reverse proxy
+Проксирует запросы на FastAPI. Отдаёт статику (/static/, /media/) напрямую. SSL через Let's Encrypt (Certbot).
+
+worker
+worker — Background tasks
+Отправка уведомлений (email, Telegram, MAX). Запускается отдельным процессом. Можно через FastAPI BackgroundTasks или отдельный контейнер с очередью задач (asyncio queue).
+
+# docker-compose.yml (упрощённая структура)
+services:
+  db:
+    image: postgres:16-alpine
+    volumes: [pgdata:/var/lib/postgresql/data]
+    environment: { POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD }
+
+  web:
+    build: .
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    depends_on: [db]
+    env_file: .env
+    volumes: [./media:/app/media]
+
+  nginx:
+    image: nginx:alpine
+    ports: ["80:80", "443:443"]
+    depends_on: [web]
+    volumes: [./nginx.conf, ./certbot]
+
+volumes: { pgdata }
+.env файл: DATABASE_URL, SECRET_KEY, YOOKASSA_SHOP_ID, YOOKASSA_SECRET, DADATA_TOKEN, TG_BOT_TOKEN, MAX_API_KEY, SMTP_HOST/PORT/USER/PASS, SITE_URL
+3
+Схема базы данных
+categories
+id
+PK serial
+name
+varchar(100)
+slug
+unique
+icon
+varchar (emoji/url)
+sort_order
+int default 0
+is_visible
+bool default true
+product_groups
+id
+PK serial
+name
+varchar(200)
+slug_base
+unique
+default_product_id
+FK → products
+products
+id
+PK serial
+category_id
+FK → categories
+group_id
+FK nullable
+variant_label
+varchar nullable
+name
+varchar(200)
+slug
+unique
+description
+text
+composition
+text nullable
+price
+int (копейки)
+weight
+varchar "310 г"
+shelf_life
+varchar nullable
+storage_cond
+varchar nullable
+kcal
+int nullable
+protein
+numeric(5,1)
+fat
+numeric(5,1)
+carbs
+numeric(5,1)
+label_popular
+bool default false
+label_halal
+bool default false
+label_post
+bool default false
+label_new
+bool default false
+label_kids
+bool default false
+label_vegan
+bool default false
+sort_order
+int default 0
+is_visible
+bool default true
+is_deleted
+bool default false
+created_at
+timestamp
+product_images
+id
+PK serial
+product_id
+FK → products
+url
+varchar
+sort_order
+int default 0
+users
+id
+PK serial
+phone
+unique varchar(20)
+name
+varchar nullable
+email
+varchar nullable
+tg_chat_id
+bigint nullable
+max_user_id
+varchar nullable
+is_blocked
+bool default false
+created_at
+timestamp
+otp_codes
+id
+PK serial
+phone
+varchar index
+code_hash
+varchar (bcrypt)
+channel
+"max" | "tg"
+attempts
+int default 0
+expires_at
+timestamp
+used
+bool default false
+notification_settings
+user_id
+PK FK → users
+email_orders
+bool true
+email_promo
+bool false
+max_orders
+bool true
+max_promo
+bool false
+tg_orders
+bool true
+tg_promo
+bool false
+orders
+id
+PK serial
+user_id
+FK → users nullable
+phone
+varchar (копия)
+address
+text
+address_lat
+numeric nullable
+address_lon
+numeric nullable
+zone_id
+FK → delivery_zones
+delivery_date
+date
+slot_start
+time
+slot_end
+time
+schedule_entry_id
+FK
+payment_method
+"online"|"terminal"|"cash"
+cash_change_from
+int nullable
+status
+enum new/accepted/delivery/done/canceled
+payment_status
+enum pending/paid/refunded
+yookassa_payment_id
+varchar nullable
+promocode_id
+FK nullable
+discount_amount
+int default 0
+cashback_spent
+int default 0
+cashback_earned
+int default 0
+delivery_price
+int
+total_amount
+int
+cancel_reason
+text nullable
+created_at
+timestamp
+order_items
+id
+PK serial
+order_id
+FK → orders
+product_id
+FK → products
+product_name
+varchar (снапшот)
+product_price
+int (снапшот)
+quantity
+int
+line_total
+int
+promocodes
+id
+PK serial
+code
+varchar unique
+type
+"discount"|"cashback"|"referral"
+discount_percent
+int nullable
+cashback_buyer_pct
+int nullable
+cashback_owner_pct
+int nullable
+owner_user_id
+FK nullable (блогер)
+min_order_amount
+int nullable
+valid_from
+timestamp
+valid_until
+timestamp
+usage_limit
+int nullable
+usage_count
+int default 0
+is_active
+bool default true
+cashback_accounts
+user_id
+PK FK → users
+balance
+int default 0 (копейки)
+updated_at
+timestamp
+cashback_transactions
+id
+PK serial
+user_id
+FK → users
+type
+"earn"|"spend"|"manual"|"withdraw"
+amount
+int (+ начисление, − списание)
+order_id
+FK nullable
+comment
+text nullable
+created_at
+timestamp
+admin_user_id
+FK nullable (кто сделал)
+delivery_zones
+id
+PK serial
+name
+varchar
+polygon
+JSON (GeoJSON)
+color
+varchar #hex
+delivery_price
+int
+free_delivery_from
+int nullable
+min_order_sum
+int nullable
+priority
+int default 0
+is_active
+bool default true
+schedule_entries
+id
+PK serial
+entry_type
+"weekday" | "date"
+weekday
+int 1–7 nullable
+specific_date
+date nullable
+delivery_start
+time (UTC+7)
+delivery_end
+time (UTC+7)
+slot_interval_min
+int (10/15/30/60/90/120)
+deadline_days_before
+int (0/1/2/3)
+deadline_time
+time (UTC+7)
+is_active
+bool default true
+stories
+id
+PK serial
+title
+varchar
+cover_image
+varchar url
+sort_order
+int
+is_visible
+bool
+expires_at
+timestamp nullable
+story_slides
+id
+PK serial
+story_id
+FK → stories
+image_url
+varchar
+text
+text nullable
+text_color
+#hex nullable
+btn_label
+varchar nullable
+btn_url
+varchar nullable
+sort_order
+int
+site_settings
+key
+PK varchar
+value
+text
+Хранит: metrika_id, webvisor, ecom_enabled, head_scripts, body_scripts, cashback_max_pct, yandex_verification
+admin_users
+id
+PK serial
+username
+unique varchar
+password_hash
+bcrypt
+is_active
+bool
+last_login
+timestamp
+Важно: цены хранятся в целых числах (копейки или рубли — выбрать одно на старте и не менять). Рекомендуется рубли как int для простоты. Все временны́е поля в UTC, отображение переводится в UTC+7 на уровне приложения.
+4
+Каталог и поиск — главная страница
+Layout (референс — samokat.ru)
+Сайдбар
+Список категорий слева с иконками. Клик — фильтрует без перезагрузки (fetch + замена контента).
+Сторис
+Горизонтальный ряд кружков над каталогом. Клик — полноэкранный просмотр.
+Подкатегории
+Горизонтальные пилюли-теги под заголовком страницы (по меткам товаров).
+Секция «Часто заказывают»
+Товары с меткой label_popular — выводятся первой секцией выше остальных.
+Основная сетка
+Карточки товаров: фото, название, вес, цена, кнопка «+».
+Поиск
+Глобальный в хедере. По названию и описанию. Без перезагрузки (debounce 300ms + fetch).
+Корзина
+Иконка в хедере с количеством. Клик → drawer справа.
+API эндпоинты каталога
+GET /
+SSR главная страница с каталогом
+GET /api/products
+JSON список. Параметры:
+?category=slug&search=текст&label=popular
+GET /category/{slug}
+SSR страница категории (для SEO)
+Метки товаров в UI
+⭐ Часто заказывают
+☪ Халяль
+✝ Пост
+🆕 Новинка
+🧒 Детям
+🌿 Vegan
+5
+Карточка товара — модальное окно + SSR
+Механика
+Клик на карточку → модал поверх каталога +
+history.pushState('/product/slug')
+Прямой URL
+GET /product/{slug} → FastAPI рендерит полный HTML с мета-тегами (SSR, не 404)
+Закрытие
+Крестик / фон →
+history.back()
+, каталог остаётся на месте
+Fetch-режим
+Запрос с заголовком
+X-Modal: true
+→ возвращает JSON с данными товара
+Галерея
+Несколько фото, переключение точками внизу
+Заголовок
+Название + вес/объём серым
+Варианты
+Пилюли-кнопки (если есть группа). Клик — обновляет данные в модале через fetch.
+КБЖУ
+Блок «В 100 граммах» — 4 колонки: Ккал / Белки / Жиры / Углеводы
+Состав
+Текст, сворачивается если длинный (кнопка «Показать полностью»)
+Доп. инфо
+Срок хранения, условия хранения
+Рекомендации
+«Что ещё пригодится» — горизонтальный скролл карточек из той же категории
+Кнопка
+Фиксированная внизу модала. Пустая корзина → «Добавить X ₽». После добавления → счётчик «− 2 +»
+6
+Группы товаров и варианты — «Котлета с пюре / с гречкой»
+Принцип
+В БД — отдельные товары. В UI — одна карточка с пилюлями выбора варианта.
+В каталоге
+Показывается ОДИН товар от группы (default_product_id). Остальные скрыты.
+В модале
+Все варианты группы → пилюли. Клик → fetch данных выбранного варианта (фото, цена, вес меняются).
+URL
+При переключении варианта →
+history.replaceState('/product/new-slug')
+Корзина
+Добавляется конкретный product_id выбранного варианта
+SEO
+Каждый вариант = свой slug = своя SSR-страница = индексируется
+Запрос в каталог: SELECT DISTINCT ON (group_id) * FROM products WHERE is_visible=true AND is_deleted=false ORDER BY group_id, sort_order — один товар от группы. Товары без group_id показываются все.
+7
+Корзина — drawer справа
+Хранение
+localStorage
+как основное. При авторизации — синхронизация с сессией на сервере.
+Структура
+Список позиций: фото, название, вес, счётчик −/+, цена × кол-во
+Итоги
+Сумма товаров · стоимость доставки · скидка промокода · списанный кешбэк ·
+Итого
+Пустая корзина
+Иллюстрация + текст «Соберите корзину, а мы всё быстро привезём»
+CTA
+Кнопка «Оформить заказ» → /checkout
+Минимум заказа
+Если сумма < min_order_sum зоны → кнопка неактивна, показываем сколько добавить
+8
+Оформление заказа
+Поля формы (по порядку)
+Телефон
+Маска
++7 (___) ___-__-__
+. Если авторизован — подставляется автоматически.
+Адрес
+Поиск через Dadata API (autocomplete). После выбора — точка на карте Leaflet + определение зоны.
+Зона
+Автоматически после выбора адреса. Показывает: стоимость доставки, порог бесплатной доставки.
+День доставки
+Пикер дат — только доступные дни (из /api/schedule/available-days).
+Время доставки
+Слоты для выбранного дня (/api/schedule/slots?date=YYYY-MM-DD).
+Оплата
+Радиокнопки: Онлайн (ЮКасса) · Терминал · Наличные + поле «Сдача с ___»
+Промокод
+Поле + «Применить» → валидация на сервере → результат инлайн
+Кешбэк
+Баланс кешбэка + чекбокс «Использовать N ₽» (до X% от суммы, настройка cashback_max_pct)
+API оформления
+GET /api/schedule/available-days
+Ближайшие 14 дней с флагом доступности
+GET /api/schedule/slots
+?date=2026-06-09
+→ список временны́х слотов
+POST /api/address/detect-zone
+{lat, lon}
+→ зона, цена, мин. сумма
+POST /api/promocode/validate
+{code, cart_total}
+→ скидка или ошибка
+POST /api/orders
+Создание заказа → возвращает order_id + redirect URL (для ЮКассы) или страницу подтверждения
+9
+Расписание доставки — слоты и дедлайны
+Часовой пояс
+Все операции в UTC+7 (Томск). Хранить и сравнивать только в UTC+7.
+Тип 1 — Дефолтный
+Привязан к дню недели (1–7). Повторяется каждую неделю. Несколько записей на один день — разрешено.
+Тип 2 — Конкретная дата
+Приоритет выше дефолтного. Перекрывает дефолт для указанной даты полностью.
+Слоты
+Диапазон доставки / интервал = список слотов. Пример: 19:00–21:00 / 1ч = [19–20, 20–21]
+Дедлайн
+deadline_dt = delivery_date − deadline_days_before (days) + deadline_time
+Варианты дедлайна
+В тот же день (0), за день (1), за 2 дня (2), за 3 дня (3)
+День без записей
+= выходной. Не отображается в пикере дат.
+Алгоритм: для каждой из ближайших 14 дат: 1) ищем записи по конкретной дате → если есть, используем только их; 2) иначе — дефолт дня недели; 3) для каждой записи проверяем now(UTC+7) ≤ deadline_dt; 4) генерируем слоты из диапазона. Возвращаем даты с флагом has_slots.
+10
+Авторизация — OTP по телефону
+Метод
+Только телефон + OTP. Без паролей. Первый вход = авторегистрация.
+Каналы OTP
+Пользователь выбирает: MAX (через MAX Business API) или Telegram-бот
+Код
+4-значный. Живёт 5 минут. Максимум 3 попытки, затем новый запрос.
+Сессия
+JWT в httpOnly cookie, TTL 30 дней.
+Telegram привязка
+Deeplink → /start в боте → бот получает chat_id → привязывает к аккаунту по токену.
+Ввод телефона
+→
+Выбор канала
+→
+OTP отправлен
+→
+Ввод кода
+→
+JWT выдан ✓
+11
+Личный кабинет
+Разделы
+Главная ЛК · Мои заказы · Детали заказа · Кешбэк · Уведомления · Профиль
+Заказы
+Список со статусами и оплатой. Кнопка «Отменить» — только у статуса «Новый».
+Детали заказа
+Состав, адрес, слот, способ оплаты, применённый промокод, движение кешбэка по заказу.
+Кешбэк
+Текущий баланс + история транзакций (тип, сумма, дата, заказ/комментарий).
+Уведомления
+6 переключателей: 2 типа × 3 канала (email/MAX/TG). Рекламные — default OFF.
+Профиль
+Имя, email (для уведомлений), телефон (только просмотр).
+12
+Зоны доставки
+Хранение
+GeoJSON-полигоны в PostgreSQL (поле JSON). Каждая зона — замкнутый полигон.
+Определение зоны
+Python-библиотека Shapely:
+Point(lon, lat).within(Polygon(coords))
+Несколько зон
+Если точка в нескольких — берётся зона с наибольшим priority.
+Вне зон
+Сообщение «Доставка в ваш район пока недоступна».
+Параметры зоны
+Название, цена доставки, мин. сумма для бесплатной доставки, мин. сумма заказа.
+13
+Оплата — ЮКасса + наличные + терминал
+ЮКасса
+SDK yookassa. При создании заказа → создаём Payment → редирект на confirmation_url.
+Webhook
+POST /api/payment/callback → проверяем подпись → обновляем payment_status = 'paid' → начисляем кешбэк → уведомляем клиента.
+Терминал / наличные
+Заказ создаётся сразу. payment_status = 'pending'. Оператор подтверждает оплату вручную в админке.
+Отмена онлайн
+Клиент отменяет → API ЮКассы refund → payment_status = 'refunded'.
+14
+Промокоды и кешбэк
+Тип 1 — Скидка %
+Скидывает X% с суммы заказа. Настройки: %, период, лимит использований, мин. сумма заказа.
+
+Тип 2 — Кешбэк покупателю
+После доставки начисляется X% от суммы заказа на кешбэк-счёт покупателя.
+
+Тип 3 — Реферальный
+Покупатель получает X% кешбэка. Владелец кода (блогер) получает Y% с каждой покупки по его коду.
+
+Трата кешбэка
+До
+cashback_max_pct
+% от суммы заказа (глобальная настройка в site_settings).
+Начисление
+Только после статуса «Доставлен». Не при создании заказа.
+Вывод (блогер)
+Оператор вручную уменьшает баланс в админке → тип транзакции «withdraw» с комментарием.
+История
+Полный лог cashback_transactions — виден пользователю в ЛК и оператору в админке.
+15
+Жизненный цикл заказа
+Статус	Кто меняет	Уведомление клиенту
+🆕 Новый	Автоматически при оформлении (ЮКасса — после webhook)	EmailTGMAX «Заказ №X принят! Доставим [дата] [слот]»
+✅ Принят	Оператор вручную в админке	EmailTGMAX «Заказ №X принят в работу. Готовим!»
+🚗 Доставляется	Оператор — когда курьер выехал	EmailTGMAX «Курьер уже едет! Прибудет [слот]»
+✓ Доставлен	Оператор. Триггер кешбэка.	EmailTGMAX «Доставлен! Приятного аппетита 🍽 +N₽ кешбэка»
+✕ Отменён	Клиент (только «Новый») или оператор (любой статус)	EmailTGMAX «Заказ №X отменён. [причина]. Возврат 3–5 дней»
+При отмене: использованный кешбэк возвращается на баланс. Счётчик использований промокода decrements. Онлайн-оплата → автовозврат через ЮКассу API.
+16
+Уведомления — Email · MAX · Telegram
+Email
+SMTP. Шаблоны Jinja2 (HTML-письма). Поле users.email — указывается в профиле ЛК.
+MAX
+MAX Business API. Привязан к номеру телефона аккаунта. Документация: MAX бизнес-API.
+Telegram
+Bot API. Поле users.tg_chat_id заполняется через deeplink при подключении бота в ЛК.
+Транзакционные
+При каждой смене статуса заказа — если канал включён в notification_settings.
+Рекламные
+Только с явного согласия (default OFF). Рассылка — вручную из админки или отдельный скрипт.
+Очередь
+Уведомления отправляются через BackgroundTasks FastAPI (или отдельный worker-контейнер).
+17
+Сторис — как у Самоката
+UI
+Горизонтальный ряд кружков над каталогом. Видны всем пользователям (авторизованным и нет).
+Просмотр
+Клик на кружок → полноэкранный слайдер. Переключение слайдов: тап/стрелки/таймер.
+Слайд
+Фото + текст + опциональная кнопка со ссылкой.
+Автоскрытие
+Если задана expires_at и время вышло — сторис не показывается (проверка при отдаче).
+18
+Админ-панель — структура разделов
+Доступ
+Отдельный логин/пароль (bcrypt). Один уровень доступа — всё могут все. Путь: /admin/
+Заказы
+Дашборд (виджеты + новые заказы) · Список с фильтрами · Карточка · Смена статуса · Отчёты
+Товары
+CRUD. Поля: название, категория, группа+вариант, цена, вес, КБЖУ, описание, состав, срок хранения, условия, фото (несколько, сортировка), 6 меток, is_visible.
+Категории
+CRUD + drag-and-drop сортировка (sort_order).
+Клиенты
+Список · Карточка · История заказов · Кешбэк-баланс с ручной правкой · История кешбэка · Блокировка.
+Промокоды
+CRUD для всех трёх типов. Привязка владельца для реферального типа.
+Кешбэк
+Общий баланс системы · Запросы на вывод · Ручная правка баланса · Общий лог транзакций.
+Сторис
+CRUD + drag-and-drop сортировка + управление слайдами + дата окончания.
+Зоны доставки
+Leaflet-карта + Leaflet.draw → рисование полигонов + параметры зоны.
+Расписание
+Список записей (тип/привязка/диапазон/дедлайн/интервал) + предпросмотр слотов на 7 дней.
+Аналитика
+Форма настройки Я.Метрики, вебвизора, e-commerce, head/body скриптов.
+Отчёты (раздел «Заказы → Отчёты»)
+Выручка
+По дням / неделям / месяцам. Фильтр по зоне и оплате. Экспорт CSV.
+Топ товаров
+По количеству заказов за период.
+Клиенты
+Новые vs повторные. Средний чек.
+Промокоды
+Применения, сумма скидок, начисленный кешбэк.
+Зоны
+Заказы и выручка по зонам доставки.
+19
+SEO
+Главная
+title: «Вкусно — доставка еды по Томску» · description: «Готовая еда с доставкой по Томску. Заказывайте онлайн.»
+Категория /category/slug
+Динамически из БД: «[Категория] с доставкой в Томске · Вкусно»
+Товар /product/slug
+«[Название] [вес] — купить с доставкой · Вкусно Томск». SSR с мета-тегами.
+noindex
+/cart, /checkout, /account/*, /admin/*
+OG-теги
+og:title, og:description, og:image (первое фото товара), og:url на каждой странице.
+Schema.org
+JSON-LD с типом Product на странице товара: name, description, image, offers (price, currency, availability), nutrition.
+sitemap.xml
+Автогенерация: главная + категории + активные товары. Эндпоинт GET /sitemap.xml
+robots.txt
+Закрыть: /admin/, /api/, /cart, /checkout, /account/
+Canonical
+<link rel="canonical"> на каждой странице.
+ЧПУ
+/category/goryachie-blyuda · /product/kotleta-kurinaya-s-pyure
+Скорость
+WebP + lazy loading для фото. Cache-Control для статики. Минификация CSS/JS.
+20
+Метрики и аналитика — раздел в админке
+Хранение
+Таблица site_settings (key-value). Значения вставляются в <head> всех страниц через Jinja2.
+Я.Метрика
+Номер счётчика + флаги: вебвизор, электронная коммерция (e-commerce).
+Электронная коммерция
+dataLayer события: view_item · add_to_cart · remove_from_cart · begin_checkout · purchase
+Я.Вебмастер
+Мета-тег верификации yandex-verification.
+Произвольный head
+Поле head_scripts — raw HTML без экранирования (GTM и др.)
+Произвольный body
+Поле body_scripts — перед </body> (чаты, пиксели и др.)
+E-commerce события: view_item — открытие модала товара; add_to_cart — нажатие «+»; begin_checkout — переход на /checkout; purchase — после POST /api/orders с order_id, revenue, списком товаров.
+21
+Деплой — Timeweb VPS · Ubuntu 24.04 LTS · Docker
+ОС
+Ubuntu 24.04 LTS. Поддержка до 2029. Python 3.12 из коробки. Актуальный Docker.
+Docker Compose
+4 сервиса: web (FastAPI) · db (PostgreSQL 16) · nginx · worker (уведомления)
+SSL
+Let's Encrypt через Certbot (certbot --nginx). Авторенёв cronjob.
+Статика
+/static/ и /media/ отдаются Nginx напрямую, не через FastAPI.
+Переменные
+.env файл (не в репозитории). Секреты: DB, ЮКасса, Dadata, TG, MAX, SMTP.
+Бэкапы
+Cronjob: pg_dump раз в день → сохраняем на VPS + опционально в S3/облако.
+Логи
+Docker logs + файловые логи FastAPI (rotating). Nginx access/error logs.
+# Структура проекта
+vkusno/
+├── app/
+│   ├── main.py             # FastAPI app, роутеры
+│   ├── models.py           # SQLAlchemy модели
+│   ├── schemas.py          # Pydantic схемы
+│   ├── crud.py             # DB операции
+│   ├── routers/
+│   │   ├── catalog.py     # GET /, /category/, /product/
+│   │   ├── cart.py
+│   │   ├── orders.py
+│   │   ├── auth.py
+│   │   ├── account.py
+│   │   ├── payment.py    # ЮКасса webhook
+│   │   ├── schedule.py
+│   │   └── admin/        # все роутеры админки
+│   ├── templates/          # Jinja2 шаблоны
+│   ├── static/             # CSS, JS, иконки
+│   ├── services/
+│   │   ├── notifications.py # email/TG/MAX
+│   │   ├── yookassa.py
+│   │   ├── dadata.py
+│   │   └── schedule.py   # генерация слотов
+│   └── database.py
+├── media/                  # загруженные фото
+├── alembic/                # миграции БД
+├── docker-compose.yml
+├── Dockerfile
+├── nginx.conf
+└── .env
+22
+Порядок реализации — для Claude Code
+Принцип: рабочий результат на каждом шаге
+Каждый этап заканчивается рабочим состоянием приложения. Следующий этап добавляет функциональность поверх предыдущего.
+
+1
+Инфраструктура и скелет проекта
+Docker Compose (web + db + nginx). FastAPI с роутерами-заглушками. SQLAlchemy + Alembic. Все модели БД и первая миграция. .env. Nginx конфиг.
+
+Docker
+FastAPI
+PostgreSQL
+Alembic
+Nginx
+2
+Каталог товаров (read-only)
+Главная страница с каталогом (SSR Jinja2). Сайдбар категорий. Сетка карточек товаров. Поиск (fetch без перезагрузки). Фильтр по категории. Нативный CSS — дизайн как у Самоката.
+
+Jinja2
+CSS
+Fetch API
+3
+Карточка товара + варианты
+Модал с history.pushState. SSR для /product/slug. Галерея фото. КБЖУ блок. Группы товаров и пилюли вариантов. Рекомендации (горизонтальный скролл).
+
+Modal
+history.pushState
+SSR
+4
+Корзина
+localStorage. Drawer справа. Добавление/удаление позиций. Счётчик в хедере. Итоговые суммы. Кнопка оформления (ведёт на заглушку).
+
+localStorage
+Drawer UI
+5
+Зоны доставки
+Модели и CRUD зон в БД. Сохранение GeoJSON. Endpoint /api/address/detect-zone с Shapely. Интеграция с Dadata (автодополнение адреса). Leaflet-карта на странице оформления.
+
+GeoJSON
+Shapely
+Dadata
+Leaflet
+6
+Расписание доставки
+Модели schedule_entries. Алгоритм генерации слотов с учётом дедлайнов (UTC+7). Эндпоинты /api/schedule/available-days и /api/schedule/slots. Пикер дат и слотов в форме оформления.
+
+Schedule
+UTC+7
+Slots
+7
+Авторизация (OTP)
+Таблица otp_codes. Интеграция MAX Business API и Telegram Bot API. JWT в httpOnly cookie. Форма входа. Deeplink для привязки Telegram.
+
+OTP
+JWT
+MAX API
+Telegram Bot
+8
+Создание заказа (без оплаты)
+POST /api/orders. Валидация всех полей. Сохранение order + order_items (снапшот цен). Страница подтверждения заказа. Синхронизация корзины из localStorage с сессией.
+
+Orders
+Validation
+9
+Оплата ЮКасса
+Интеграция yookassa SDK. Создание Payment при заказе. Редирект на виджет. Webhook /api/payment/callback с проверкой подписи. Обновление payment_status. Возврат при отмене.
+
+ЮКасса
+Webhook
+Refund
+10
+Промокоды и кешбэк
+Модели promocodes, cashback_accounts, cashback_transactions. Валидация промокода. Применение скидки/кешбэка в заказе. Начисление после статуса «Доставлен». Блок в форме оформления.
+
+Promocodes
+Cashback
+11
+Уведомления
+Worker-сервис. SMTP email с Jinja2-шаблонами. MAX Business API. Telegram Bot. Отправка при смене статуса заказа. Проверка флагов notification_settings.
+
+SMTP
+MAX
+Telegram
+Worker
+12
+Личный кабинет
+Страницы: список заказов, детали заказа, кешбэк с историей, настройки уведомлений, профиль. Кнопка отмены заказа (статус «Новый»). Синхронизация корзины.
+
+Account
+History
+13
+Сторис
+Модели stories + story_slides. Компонент на главной (кружки + полноэкранный слайдер). Автоскрытие по expires_at.
+
+Stories
+Slider
+14
+Админ-панель — заказы и клиенты
+Авторизация администратора (login/password). Дашборд с виджетами. Список заказов с фильтрами. Смена статуса. Карточка клиента с историей. Ручная правка кешбэка. Отчёты (CSV экспорт).
+
+Admin
+Dashboard
+Reports
+15
+Админ-панель — товары и категории
+CRUD товаров (с загрузкой фото). Управление группами/вариантами. CRUD категорий с drag-and-drop сортировкой. Управление метками. Поле is_visible.
+
+CRUD
+File Upload
+Drag-and-drop
+16
+Админ-панель — промокоды, кешбэк, сторис, расписание
+CRUD промокодов (3 типа). Управление выводом кешбэка блогеров. CRUD сторис со слайдами. CRUD расписания с предпросмотром слотов.
+
+Promocodes
+Stories Admin
+Schedule Admin
+17
+Зоны доставки в админке
+Leaflet-карта с Leaflet.draw. Рисование и редактирование полигонов. Сохранение GeoJSON. Настройка параметров зоны. Цветовое различение зон на карте.
+
+Leaflet.draw
+GeoJSON
+18
+SEO и метрики
+Мета-теги и OG для всех страниц. Schema.org JSON-LD на товарах. sitemap.xml (автогенерация). robots.txt. Раздел «Аналитика» в админке (Я.Метрика + dataLayer события + произвольные скрипты).
+
+SEO
+Schema.org
+Я.Метрика
+dataLayer
+19
+Финальная отделка и деплой
+Оптимизация изображений (конвертация в WebP). lazy loading. Cache-Control для статики. Минификация CSS/JS. Certbot SSL. Настройка pg_dump cronjob. Финальное тестирование всех флоу.
+
+WebP
+SSL
+Backup
+Performance

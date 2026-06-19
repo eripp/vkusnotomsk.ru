@@ -1,0 +1,191 @@
+{% extends "admin/base.html" %}
+{% block title %}Расписание{% endblock %}
+{% block page_title %}Расписание доставки{% endblock %}
+{% set active = 'schedule' %}
+
+{% block topbar_actions %}
+<button class="btn btn-secondary btn-sm" onclick="loadPreview()">👁 Предпросмотр слотов</button>
+<button class="btn btn-primary btn-sm" onclick="openModal()">+ Добавить запись</button>
+{% endblock %}
+
+{% block content %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+<div class="adm-card" style="padding:0;overflow:hidden">
+  <div class="adm-table-wrap">
+    <table class="adm-table">
+      <thead><tr>
+        <th>Тип</th><th>День недели / Дата</th><th>Доставка с</th><th>До</th><th>Интервал</th><th>Дедлайн</th><th>Статус</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for e in entries %}
+      <tr>
+        <td>{{ 'По дате' if e.entry_type.value == 'date' else 'По дням' }}</td>
+        <td>{% if e.entry_type.value == 'date' %}{{ e.specific_date }}{% else %}{{ WEEKDAYS[e.weekday] }}{% endif %}</td>
+        <td>{{ e.delivery_start.strftime('%H:%M') }}</td>
+        <td>{{ e.delivery_end.strftime('%H:%M') }}</td>
+        <td>{{ e.slot_interval_min }} мин</td>
+        <td>
+          {%- if e.deadline_days_before == 0 -%}в тот же день
+          {%- elif e.deadline_days_before == 1 -%}за день
+          {%- else -%}за {{ e.deadline_days_before }} дн.{%- endif %} до {{ e.deadline_time.strftime('%H:%M') }}
+        </td>
+        <td><span class="badge {% if e.is_active %}badge-active{% else %}badge-inactive{% endif %}">{% if e.is_active %}Активна{% else %}Выкл{% endif %}</span></td>
+        <td>
+          <div class="btn-group">
+            <button class="btn btn-sm btn-secondary" onclick="editEntry(ENTRIES[{{ loop.index0 }}])">✏️</button>
+            <form method="post" action="/admin/schedule/{{ e.id }}/toggle" style="display:inline">
+              <button class="btn btn-sm btn-secondary" type="submit">{% if e.is_active %}⏸{% else %}▶{% endif %}</button>
+            </form>
+            <form method="post" action="/admin/schedule/{{ e.id }}/delete" style="display:inline">
+              <button class="btn btn-sm btn-danger" type="submit" onclick="return confirm('Удалить?')">🗑</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" style="color:#aaa;padding:24px;text-align:center">Записей нет</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div id="se-preview" class="adm-card" style="margin-top:18px;display:none">
+  <h3 style="margin:0 0 12px">Предпросмотр слотов на 7 дней</h3>
+  <div id="se-preview-body" style="display:grid;gap:10px"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const WEEKDAYS = {{ WEEKDAYS | tojson }};
+const ENTRIES  = {{ entries_json | tojson }};
+
+function openModal(data) {
+  document.getElementById('se-modal').style.display = 'flex';
+  document.getElementById('se-id').value = data ? data.id : '';
+  document.getElementById('se-type').value = data ? data.entry_type : 'weekday';
+  document.getElementById('se-weekday').value = data ? (data.weekday ?? 1) : 1;
+  document.getElementById('se-date').value = data ? (data.specific_date || '') : '';
+  document.getElementById('se-start').value = data ? data.delivery_start.slice(0,5) : '10:00';
+  document.getElementById('se-end').value = data ? data.delivery_end.slice(0,5) : '20:00';
+  document.getElementById('se-interval').value = data ? data.slot_interval_min : 60;
+  document.getElementById('se-deadline-days').value = data ? data.deadline_days_before : 0;
+  document.getElementById('se-deadline-time').value = data ? data.deadline_time.slice(0,5) : '00:00';
+  document.getElementById('se-active').checked = data ? data.is_active : true;
+  toggleType();
+}
+function closeModal() { document.getElementById('se-modal').style.display = 'none'; }
+function editEntry(data) { openModal(data); }
+function toggleType() {
+  const t = document.getElementById('se-type').value;
+  document.getElementById('se-weekday-row').style.display = t === 'weekday' ? '' : 'none';
+  document.getElementById('se-date-row').style.display    = t === 'date'    ? '' : 'none';
+}
+
+async function saveEntry() {
+  const id = document.getElementById('se-id').value;
+  const type = document.getElementById('se-type').value;
+  const body = {
+    entry_type:          type,
+    weekday:             type === 'weekday' ? parseInt(document.getElementById('se-weekday').value) : null,
+    specific_date:       type === 'date'    ? document.getElementById('se-date').value : null,
+    delivery_start:      document.getElementById('se-start').value,
+    delivery_end:        document.getElementById('se-end').value,
+    slot_interval_min:    parseInt(document.getElementById('se-interval').value),
+    deadline_days_before: parseInt(document.getElementById('se-deadline-days').value),
+    deadline_time:        document.getElementById('se-deadline-time').value,
+    is_active:            document.getElementById('se-active').checked,
+  };
+  const url    = id ? `/admin/schedule/${id}` : '/admin/schedule';
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (res.ok) location.reload();
+  else alert('Ошибка: ' + (await res.json()).detail);
+}
+
+async function loadPreview() {
+  const box  = document.getElementById('se-preview');
+  const body = document.getElementById('se-preview-body');
+  box.style.display = '';
+  body.innerHTML = 'Загрузка…';
+  try {
+    const res  = await fetch('/admin/schedule/preview');
+    const data = await res.json();
+    body.innerHTML = data.days.map(d => {
+      const slots = d.slots.length
+        ? d.slots.map(s => `<span class="badge badge-active" style="margin:2px">${s}</span>`).join('')
+        : '<span style="color:#aaa">выходной (нет слотов)</span>';
+      return `<div style="border-bottom:1px solid #eee;padding:8px 0">
+        <b>${d.date}</b> · ${WEEKDAYS[d.weekday]}<br>${slots}</div>`;
+    }).join('');
+  } catch {
+    body.innerHTML = '<span style="color:#c00">Не удалось загрузить предпросмотр</span>';
+  }
+}
+</script>
+
+<div id="se-modal" class="adm-modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="adm-modal">
+    <h3>Запись расписания</h3>
+    <input type="hidden" id="se-id">
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Тип</label>
+        <select id="se-type" onchange="toggleType()">
+          <option value="weekday">По дню недели</option>
+          <option value="date">По конкретной дате</option>
+        </select>
+      </div>
+      <div id="se-weekday-row" class="adm-field">
+        <label>День недели</label>
+        <select id="se-weekday">
+          {% for i, name in WEEKDAYS.items() %}
+          <option value="{{ i }}">{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="se-date-row" class="adm-field" style="display:none">
+        <label>Конкретная дата</label>
+        <input id="se-date" type="date">
+      </div>
+      <div class="adm-field-row">
+        <div class="adm-field"><label>Доставка с</label><input id="se-start" type="time"></div>
+        <div class="adm-field"><label>До</label><input id="se-end" type="time"></div>
+      </div>
+      <div class="adm-field-row">
+        <div class="adm-field">
+          <label>Интервал слота</label>
+          <select id="se-interval">
+            <option value="10">10 мин</option>
+            <option value="15">15 мин</option>
+            <option value="30">30 мин</option>
+            <option value="60">1 час</option>
+            <option value="90">1,5 часа</option>
+            <option value="120">2 часа</option>
+          </select>
+        </div>
+      </div>
+      <div class="adm-field-row">
+        <div class="adm-field">
+          <label>Дедлайн заказа</label>
+          <select id="se-deadline-days">
+            <option value="0">В тот же день</option>
+            <option value="1">За день</option>
+            <option value="2">За 2 дня</option>
+            <option value="3">За 3 дня</option>
+          </select>
+        </div>
+        <div class="adm-field"><label>Время дедлайна</label><input id="se-deadline-time" type="time"></div>
+      </div>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer">
+        <input type="checkbox" id="se-active" checked style="width:auto"> Активна
+      </label>
+    </div>
+    <div class="btn-group" style="margin-top:18px">
+      <button class="btn btn-primary" onclick="saveEntry()">Сохранить</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

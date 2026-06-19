@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>ТЗ · Вкусно · Томск</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; font-size: 14px; line-height: 1.65; background: #f9f8f5; color: #1a1a18; }
+
+/* LAYOUT */
+.sidebar { position: fixed; top: 0; left: 0; width: 220px; height: 100vh; background: #1a1a18; overflow-y: auto; padding: 1rem 0; z-index: 100; }
+.sidebar-logo { padding: .75rem 1.25rem 1rem; font-size: 15px; font-weight: 700; color: #fff; border-bottom: 1px solid #333; margin-bottom: .5rem; }
+.sidebar-logo span { color: #E85D24; }
+.nav-group { padding: .25rem 0; }
+.nav-label { font-size: 10px; font-weight: 700; color: #888780; letter-spacing: .1em; text-transform: uppercase; padding: .5rem 1.25rem .2rem; }
+.nav-item { display: block; padding: .35rem 1.25rem; font-size: 13px; color: #b4b2a9; cursor: pointer; border-left: 2px solid transparent; text-decoration: none; }
+.nav-item:hover { color: #fff; background: rgba(255,255,255,.05); }
+.nav-item.active { color: #fff; border-left-color: #E85D24; background: rgba(232,93,36,.08); }
+
+.main { margin-left: 220px; padding: 2rem 2.5rem; max-width: 960px; }
+.page-title { font-size: 24px; font-weight: 700; color: #1a1a18; margin-bottom: .25rem; }
+.page-sub { font-size: 14px; color: #888780; margin-bottom: 2rem; }
+
+/* SECTIONS */
+.section { margin-bottom: 2.5rem; scroll-margin-top: 1.5rem; }
+.section-header { display: flex; align-items: center; gap: .65rem; margin-bottom: 1rem; padding-bottom: .6rem; border-bottom: 2px solid #e0dfd8; }
+.section-num { width: 28px; height: 28px; border-radius: 8px; background: #1a1a18; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.section-title { font-size: 17px; font-weight: 700; color: #1a1a18; }
+.section-title span { font-size: 13px; font-weight: 400; color: #888780; margin-left: .5rem; }
+
+/* CARDS */
+.card { background: #fff; border: 1px solid #e0dfd8; border-radius: 12px; padding: 1.1rem 1.35rem; margin-bottom: .75rem; }
+.card h3 { font-size: 13px; font-weight: 700; color: #1a1a18; margin-bottom: .5rem; }
+.row { display: flex; gap: .5rem; align-items: flex-start; margin-bottom: .38rem; font-size: 13px; }
+.row:last-child { margin-bottom: 0; }
+.badge { font-size: 11px; font-weight: 700; border-radius: 5px; padding: 2px 7px; white-space: nowrap; flex-shrink: 0; }
+.b-blue   { background:#E6F1FB;color:#0C447C; }
+.b-teal   { background:#E1F5EE;color:#085041; }
+.b-amber  { background:#FAEEDA;color:#633806; }
+.b-gray   { background:#F1EFE8;color:#444441; }
+.b-coral  { background:#FAECE7;color:#712B13; }
+.b-purple { background:#EEEDFE;color:#3C3489; }
+.b-green  { background:#EAF3DE;color:#27500A; }
+.b-pink   { background:#FBEAF0;color:#72243E; }
+.b-red    { background:#FCEBEB;color:#791F1F; }
+code { font-family: monospace; font-size: 12px; background: #f1efe8; border-radius: 4px; padding: 1px 5px; }
+.note { padding: .6rem .85rem; border-radius: 8px; background: #f9f8f5; border: 1px solid #e0dfd8; font-size: 12px; color: #5f5e5a; line-height: 1.55; margin-top: .55rem; }
+.note strong { color: #1a1a18; }
+hr { border: none; border-top: 1px solid #e0dfd8; margin: .75rem 0; }
+
+/* STACK */
+.stack-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; }
+.stack-card { background: #fff; border: 1px solid #e0dfd8; border-radius: 10px; padding: .75rem .9rem; }
+.stack-card h4 { font-size: 11px; font-weight: 700; color: #888780; text-transform: uppercase; letter-spacing: .07em; margin-bottom: .4rem; }
+.stack-card p  { font-size: 13px; color: #1a1a18; line-height: 1.5; }
+.stack-card p span { color: #5f5e5a; font-size: 12px; }
+
+/* DB SCHEMA */
+.db-wrap { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; }
+.db-table { background: #fff; border: 1px solid #e0dfd8; border-radius: 10px; overflow: hidden; font-size: 12px; }
+.db-head  { padding: .35rem .75rem; font-size: 11px; font-weight: 700; border-bottom: 1px solid #e0dfd8; }
+.dh-blue   { background:#E6F1FB;color:#0C447C; }
+.dh-teal   { background:#E1F5EE;color:#085041; }
+.dh-amber  { background:#FAEEDA;color:#633806; }
+.dh-purple { background:#EEEDFE;color:#3C3489; }
+.dh-green  { background:#EAF3DE;color:#27500A; }
+.dh-coral  { background:#FAECE7;color:#712B13; }
+.dh-pink   { background:#FBEAF0;color:#72243E; }
+.dh-gray   { background:#F1EFE8;color:#444441; }
+.db-field { padding: .22rem .75rem; color: #5f5e5a; border-bottom: 1px solid #f1efe8; display: flex; justify-content: space-between; }
+.db-field:last-child { border-bottom: none; }
+.db-field span { color: #888780; font-size: 11px; }
+.db-field strong { color: #1a1a18; }
+
+/* LIFECYCLE */
+.lc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.lc-table th { text-align: left; padding: .4rem .65rem; font-size: 11px; font-weight: 700; color: #888780; border-bottom: 2px solid #e0dfd8; }
+.lc-table td { padding: .5rem .65rem; border-bottom: 1px solid #f1efe8; vertical-align: top; }
+.lc-table tr:last-child td { border-bottom: none; }
+.status-pill { display:inline-block; font-size: 11px; font-weight: 700; border-radius: 20px; padding: 2px 10px; border: 1.5px solid; }
+.s-new      { background:#E6F1FB;border-color:#85B7EB;color:#0C447C; }
+.s-accepted { background:#FAEEDA;border-color:#EF9F27;color:#633806; }
+.s-delivery { background:#EEEDFE;border-color:#AFA9EC;color:#3C3489; }
+.s-done     { background:#EAF3DE;border-color:#97C459;color:#27500A; }
+.s-canceled { background:#F1EFE8;border-color:#B4B2A9;color:#5F5E5A; }
+.nc { display:inline-block;font-size:10px;font-weight:700;border-radius:3px;padding:1px 5px;margin:.1rem .1rem 0 0; }
+.nc-email { background:#E6F1FB;color:#0C447C; }
+.nc-tg    { background:#EEEDFE;color:#3C3489; }
+.nc-max   { background:#EAF3DE;color:#085041; }
+
+/* DOCKER */
+.services-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: .6rem; }
+.svc-card { background: #fff; border: 1px solid #e0dfd8; border-radius: 10px; padding: .75rem .9rem; font-size: 13px; }
+.svc-card h4 { font-weight: 700; color: #1a1a18; margin-bottom: .3rem; font-size: 13px; }
+.svc-card p  { color: #5f5e5a; font-size: 12px; line-height: 1.5; }
+.svc-port { display:inline-block;font-size:11px;font-weight:700;background:#1a1a18;color:#fff;border-radius:4px;padding:1px 6px;margin-bottom:.3rem; }
+
+/* ROADMAP */
+.roadmap { display: flex; flex-direction: column; gap: .5rem; }
+.rm-step { display: grid; grid-template-columns: 32px 1fr; gap: .65rem; align-items: start; }
+.rm-num  { width: 28px; height: 28px; border-radius: 50%; background: #1a1a18; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: .1rem; }
+.rm-body { background: #fff; border: 1px solid #e0dfd8; border-radius: 10px; padding: .65rem .9rem; }
+.rm-body h4 { font-size: 13px; font-weight: 700; color: #1a1a18; margin-bottom: .2rem; }
+.rm-body p  { font-size: 12px; color: #5f5e5a; line-height: 1.5; }
+.rm-tags { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .35rem; }
+.rm-tag  { font-size: 11px; background: #f1efe8; color: #5f5e5a; border-radius: 4px; padding: 1px 6px; }
+
+/* TAGS */
+.tags { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .4rem; }
+.tag { font-size: 11px; font-weight: 700; border-radius: 20px; padding: 2px 9px; border: 1.5px solid; }
+.tag-pop   { background:#FAEEDA;border-color:#EF9F27;color:#633806; }
+.tag-halal { background:#EAF3DE;border-color:#97C459;color:#27500A; }
+.tag-post  { background:#EEEDFE;border-color:#AFA9EC;color:#3C3489; }
+.tag-new   { background:#E6F1FB;border-color:#85B7EB;color:#0C447C; }
+.tag-kids  { background:#FBEAF0;border-color:#ED93B1;color:#72243E; }
+.tag-vegan { background:#E1F5EE;border-color:#5DCAA5;color:#085041; }
+
+/* FLOW */
+.flow { display:flex;align-items:center;gap:.3rem;flex-wrap:wrap;margin-top:.5rem;font-size:12px; }
+.flow-step { background:#f9f8f5;border:1px solid #d3d1c7;border-radius:7px;padding:3px 10px;color:#1a1a18; }
+.flow-step.green { background:#EAF3DE;border-color:#97C459;color:#27500A; }
+.flow-arr { color:#888780; }
+
+/* SEO schema */
+.schema-block { background:#1a1a18;border-radius:10px;padding:.85rem 1.1rem;margin-top:.55rem;font-size:12px;font-family:monospace;color:#9FE1CB;line-height:1.7; }
+.schema-block .k { color:#FAC775; }
+.schema-block .v { color:#B5D4F4; }
+.schema-block .s { color:#F5C4B3; }
+
+/* DOCKER COMPOSE SNIPPET */
+.code-block { background:#1a1a18;border-radius:10px;padding:.85rem 1.1rem;margin-top:.55rem;font-size:12px;font-family:monospace;color:#b4b2a9;line-height:1.75; }
+.code-block .kw  { color:#FAC775; }
+.code-block .val { color:#9FE1CB; }
+.code-block .cmt { color:#5f5e5a; }
+.code-block .str { color:#F5C4B3; }
+
+/* PROMO GRID */
+.promo-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: .6rem; margin-top: .55rem; }
+.promo-card { border-radius: 10px; padding: .75rem .9rem; font-size: 12px; }
+.pc-1 { background:#FAEEDA;border:1px solid #FAC775; }
+.pc-2 { background:#EAF3DE;border:1px solid #C0DD97; }
+.pc-3 { background:#EEEDFE;border:1px solid #AFA9EC; }
+.promo-card h4 { font-size: 12px; font-weight: 700; margin-bottom: .25rem; }
+.pc-1 h4 { color:#633806; }
+.pc-2 h4 { color:#27500A; }
+.pc-3 h4 { color:#3C3489; }
+.promo-card p { color: #5f5e5a; line-height: 1.45; }
+
+/* highlight box */
+.highlight { background:#EAF3DE;border:1px solid #C0DD97;border-radius:10px;padding:.85rem 1.1rem;margin-bottom:.75rem; }
+.highlight h3 { font-size:13px;font-weight:700;color:#27500A;margin-bottom:.35rem; }
+.highlight p  { font-size:13px;color:#3d3d3a;line-height:1.55; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-logo">⚡ <span>Вкусно</span> · ТЗ</div>
+  <div class="nav-group">
+    <div class="nav-label">Проект</div>
+    <a class="nav-item active" href="#stack">Стек технологий</a>
+    <a class="nav-item" href="#arch">Архитектура</a>
+    <a class="nav-item" href="#db">Схема БД</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-label">Клиентская часть</div>
+    <a class="nav-item" href="#catalog">Каталог и поиск</a>
+    <a class="nav-item" href="#product">Карточка товара</a>
+    <a class="nav-item" href="#variants">Варианты / группы</a>
+    <a class="nav-item" href="#cart">Корзина</a>
+    <a class="nav-item" href="#checkout">Оформление заказа</a>
+    <a class="nav-item" href="#schedule">Расписание доставки</a>
+    <a class="nav-item" href="#auth">Авторизация</a>
+    <a class="nav-item" href="#account">Личный кабинет</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-label">Бизнес-логика</div>
+    <a class="nav-item" href="#zones">Зоны доставки</a>
+    <a class="nav-item" href="#payment">Оплата ЮКасса</a>
+    <a class="nav-item" href="#promo">Промокоды и кешбэк</a>
+    <a class="nav-item" href="#lifecycle">Жизненный цикл заказа</a>
+    <a class="nav-item" href="#notifications">Уведомления</a>
+    <a class="nav-item" href="#stories">Сторис</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-label">Админ-панель</div>
+    <a class="nav-item" href="#admin">Структура и разделы</a>
+    <a class="nav-item" href="#seo">SEO</a>
+    <a class="nav-item" href="#metrics">Метрики и аналитика</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-label">Инфраструктура</div>
+    <a class="nav-item" href="#docker">Docker и сервисы</a>
+    <a class="nav-item" href="#roadmap">Порядок реализации</a>
+  </div>
+</nav>
+
+<main class="main">
+  <div class="page-title">Техническое задание</div>
+  <div class="page-sub">Вкусно · Интернет-магазин готовой еды с доставкой · г. Томск · Версия 1.0</div>
+
+  <!-- ====== СТЕК ====== -->
+  <div class="section" id="stack">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <div class="section-title">Стек технологий <span>— минимум фреймворков, максимум нативного кода</span></div>
+    </div>
+    <div class="stack-grid">
+      <div class="stack-card"><h4>Backend</h4><p>Python 3.12 + FastAPI<br><span>Uvicorn, Pydantic v2, SQLAlchemy 2.0</span></p></div>
+      <div class="stack-card"><h4>База данных</h4><p>PostgreSQL 16<br><span>Alembic для миграций</span></p></div>
+      <div class="stack-card"><h4>Frontend</h4><p>Нативный HTML + CSS + Vanilla JS<br><span>Без React/Vue/Angular. Минимум зависимостей.</span></p></div>
+      <div class="stack-card"><h4>Шаблоны</h4><p>Jinja2 (SSR)<br><span>FastAPI встроенная поддержка. Fetch/AJAX для динамики.</span></p></div>
+      <div class="stack-card"><h4>Карты и геокодинг</h4><p>Leaflet.js + OSM<br><span>Dadata API — поиск адресов и геокодинг. Shapely — point-in-polygon.</span></p></div>
+      <div class="stack-card"><h4>Инфраструктура</h4><p>Docker + Docker Compose<br><span>Nginx как reverse proxy. Ubuntu 24.04 LTS на Timeweb VPS.</span></p></div>
+      <div class="stack-card"><h4>Оплата</h4><p>ЮКасса (YooKassa SDK)<br><span>Webhook для подтверждения оплаты</span></p></div>
+      <div class="stack-card"><h4>Уведомления</h4><p>SMTP (email) · MAX Business API · Telegram Bot API<br><span>python-telegram-bot или httpx напрямую</span></p></div>
+      <div class="stack-card"><h4>Хранение файлов</h4><p>Локальная файловая система<br><span>/media/ на VPS. Nginx отдаёт статику напрямую.</span></p></div>
+    </div>
+    <div class="note" style="margin-top:.75rem"><strong>Принцип:</strong> не подключать библиотеку если задача решается 10 строками нативного кода. Jinja2 вместо SPA. Fetch вместо axios. Нативный CSS без Tailwind/Bootstrap.</div>
+  </div>
+
+  <!-- ====== АРХИТЕКТУРА ====== -->
+  <div class="section" id="arch">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <div class="section-title">Архитектура <span>— Docker-сервисы</span></div>
+    </div>
+    <div class="services-grid">
+      <div class="svc-card">
+        <div class="svc-port">:8000</div>
+        <h4>web — FastAPI приложение</h4>
+        <p>Основное приложение: рендер страниц (SSR Jinja2), REST API для фронта, бизнес-логика. Точка входа: <code>uvicorn main:app</code></p>
+      </div>
+      <div class="svc-card">
+        <div class="svc-port">:5432</div>
+        <h4>db — PostgreSQL 16</h4>
+        <p>База данных. Volume для персистентности данных. Доступна только внутри Docker-сети.</p>
+      </div>
+      <div class="svc-card">
+        <div class="svc-port">:80 / :443</div>
+        <h4>nginx — Reverse proxy</h4>
+        <p>Проксирует запросы на FastAPI. Отдаёт статику (/static/, /media/) напрямую. SSL через Let's Encrypt (Certbot).</p>
+      </div>
+      <div class="svc-card">
+        <div class="svc-port">worker</div>
+        <h4>worker — Background tasks</h4>
+        <p>Отправка уведомлений (email, Telegram, MAX). Запускается отдельным процессом. Можно через FastAPI BackgroundTasks или отдельный контейнер с очередью задач (asyncio queue).</p>
+      </div>
+    </div>
+    <div class="code-block">
+<span class="cmt"># docker-compose.yml (упрощённая структура)</span><br>
+<span class="kw">services</span>:<br>
+&nbsp;&nbsp;<span class="kw">db</span>:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;image: <span class="str">postgres:16-alpine</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;volumes: [<span class="str">pgdata:/var/lib/postgresql/data</span>]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;environment: { POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD }<br>
+<br>
+&nbsp;&nbsp;<span class="kw">web</span>:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;build: <span class="str">.</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;command: <span class="str">uvicorn main:app --host 0.0.0.0 --port 8000</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;depends_on: [db]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;env_file: <span class="str">.env</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;volumes: [<span class="str">./media:/app/media</span>]<br>
+<br>
+&nbsp;&nbsp;<span class="kw">nginx</span>:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;image: <span class="str">nginx:alpine</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ports: [<span class="str">"80:80"</span>, <span class="str">"443:443"</span>]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;depends_on: [web]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;volumes: [<span class="str">./nginx.conf, ./certbot</span>]<br>
+<br>
+<span class="kw">volumes</span>: { pgdata }
+    </div>
+    <div class="note" style="margin-top:.6rem"><strong>.env файл:</strong> DATABASE_URL, SECRET_KEY, YOOKASSA_SHOP_ID, YOOKASSA_SECRET, DADATA_TOKEN, TG_BOT_TOKEN, MAX_API_KEY, SMTP_HOST/PORT/USER/PASS, SITE_URL</div>
+  </div>
+
+  <!-- ====== БД ====== -->
+  <div class="section" id="db">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <div class="section-title">Схема базы данных</div>
+    </div>
+    <div class="db-wrap">
+
+      <div class="db-table">
+        <div class="db-head dh-blue">categories</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">name<span>varchar(100)</span></div>
+        <div class="db-field">slug<span>unique</span></div>
+        <div class="db-field">icon<span>varchar (emoji/url)</span></div>
+        <div class="db-field">sort_order<span>int default 0</span></div>
+        <div class="db-field">is_visible<span>bool default true</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-blue">product_groups</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">name<span>varchar(200)</span></div>
+        <div class="db-field">slug_base<span>unique</span></div>
+        <div class="db-field">default_product_id<span>FK → products</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-blue">products</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">category_id<span>FK → categories</span></div>
+        <div class="db-field">group_id<span>FK nullable</span></div>
+        <div class="db-field">variant_label<span>varchar nullable</span></div>
+        <div class="db-field">name<span>varchar(200)</span></div>
+        <div class="db-field">slug<span>unique</span></div>
+        <div class="db-field">description<span>text</span></div>
+        <div class="db-field">composition<span>text nullable</span></div>
+        <div class="db-field">price<span>int (копейки)</span></div>
+        <div class="db-field">weight<span>varchar "310 г"</span></div>
+        <div class="db-field">shelf_life<span>varchar nullable</span></div>
+        <div class="db-field">storage_cond<span>varchar nullable</span></div>
+        <div class="db-field">kcal<span>int nullable</span></div>
+        <div class="db-field">protein<span>numeric(5,1)</span></div>
+        <div class="db-field">fat<span>numeric(5,1)</span></div>
+        <div class="db-field">carbs<span>numeric(5,1)</span></div>
+        <div class="db-field">label_popular<span>bool default false</span></div>
+        <div class="db-field">label_halal<span>bool default false</span></div>
+        <div class="db-field">label_post<span>bool default false</span></div>
+        <div class="db-field">label_new<span>bool default false</span></div>
+        <div class="db-field">label_kids<span>bool default false</span></div>
+        <div class="db-field">label_vegan<span>bool default false</span></div>
+        <div class="db-field">sort_order<span>int default 0</span></div>
+        <div class="db-field">is_visible<span>bool default true</span></div>
+        <div class="db-field">is_deleted<span>bool default false</span></div>
+        <div class="db-field">created_at<span>timestamp</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-blue">product_images</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">product_id<span>FK → products</span></div>
+        <div class="db-field">url<span>varchar</span></div>
+        <div class="db-field">sort_order<span>int default 0</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-teal">users</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">phone<span>unique varchar(20)</span></div>
+        <div class="db-field">name<span>varchar nullable</span></div>
+        <div class="db-field">email<span>varchar nullable</span></div>
+        <div class="db-field">tg_chat_id<span>bigint nullable</span></div>
+        <div class="db-field">max_user_id<span>varchar nullable</span></div>
+        <div class="db-field">is_blocked<span>bool default false</span></div>
+        <div class="db-field">created_at<span>timestamp</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-teal">otp_codes</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">phone<span>varchar index</span></div>
+        <div class="db-field">code_hash<span>varchar (bcrypt)</span></div>
+        <div class="db-field">channel<span>"max" | "tg"</span></div>
+        <div class="db-field">attempts<span>int default 0</span></div>
+        <div class="db-field">expires_at<span>timestamp</span></div>
+        <div class="db-field">used<span>bool default false</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-teal">notification_settings</div>
+        <div class="db-field"><strong>user_id</strong><span>PK FK → users</span></div>
+        <div class="db-field">email_orders<span>bool true</span></div>
+        <div class="db-field">email_promo<span>bool false</span></div>
+        <div class="db-field">max_orders<span>bool true</span></div>
+        <div class="db-field">max_promo<span>bool false</span></div>
+        <div class="db-field">tg_orders<span>bool true</span></div>
+        <div class="db-field">tg_promo<span>bool false</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-amber">orders</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">user_id<span>FK → users nullable</span></div>
+        <div class="db-field">phone<span>varchar (копия)</span></div>
+        <div class="db-field">address<span>text</span></div>
+        <div class="db-field">address_lat<span>numeric nullable</span></div>
+        <div class="db-field">address_lon<span>numeric nullable</span></div>
+        <div class="db-field">zone_id<span>FK → delivery_zones</span></div>
+        <div class="db-field">delivery_date<span>date</span></div>
+        <div class="db-field">slot_start<span>time</span></div>
+        <div class="db-field">slot_end<span>time</span></div>
+        <div class="db-field">schedule_entry_id<span>FK</span></div>
+        <div class="db-field">payment_method<span>"online"|"terminal"|"cash"</span></div>
+        <div class="db-field">cash_change_from<span>int nullable</span></div>
+        <div class="db-field">status<span>enum new/accepted/delivery/done/canceled</span></div>
+        <div class="db-field">payment_status<span>enum pending/paid/refunded</span></div>
+        <div class="db-field">yookassa_payment_id<span>varchar nullable</span></div>
+        <div class="db-field">promocode_id<span>FK nullable</span></div>
+        <div class="db-field">discount_amount<span>int default 0</span></div>
+        <div class="db-field">cashback_spent<span>int default 0</span></div>
+        <div class="db-field">cashback_earned<span>int default 0</span></div>
+        <div class="db-field">delivery_price<span>int</span></div>
+        <div class="db-field">total_amount<span>int</span></div>
+        <div class="db-field">cancel_reason<span>text nullable</span></div>
+        <div class="db-field">created_at<span>timestamp</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-amber">order_items</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">order_id<span>FK → orders</span></div>
+        <div class="db-field">product_id<span>FK → products</span></div>
+        <div class="db-field">product_name<span>varchar (снапшот)</span></div>
+        <div class="db-field">product_price<span>int (снапшот)</span></div>
+        <div class="db-field">quantity<span>int</span></div>
+        <div class="db-field">line_total<span>int</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-purple">promocodes</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">code<span>varchar unique</span></div>
+        <div class="db-field">type<span>"discount"|"cashback"|"referral"</span></div>
+        <div class="db-field">discount_percent<span>int nullable</span></div>
+        <div class="db-field">cashback_buyer_pct<span>int nullable</span></div>
+        <div class="db-field">cashback_owner_pct<span>int nullable</span></div>
+        <div class="db-field">owner_user_id<span>FK nullable (блогер)</span></div>
+        <div class="db-field">min_order_amount<span>int nullable</span></div>
+        <div class="db-field">valid_from<span>timestamp</span></div>
+        <div class="db-field">valid_until<span>timestamp</span></div>
+        <div class="db-field">usage_limit<span>int nullable</span></div>
+        <div class="db-field">usage_count<span>int default 0</span></div>
+        <div class="db-field">is_active<span>bool default true</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-purple">cashback_accounts</div>
+        <div class="db-field"><strong>user_id</strong><span>PK FK → users</span></div>
+        <div class="db-field">balance<span>int default 0 (копейки)</span></div>
+        <div class="db-field">updated_at<span>timestamp</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-purple">cashback_transactions</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">user_id<span>FK → users</span></div>
+        <div class="db-field">type<span>"earn"|"spend"|"manual"|"withdraw"</span></div>
+        <div class="db-field">amount<span>int (+ начисление, − списание)</span></div>
+        <div class="db-field">order_id<span>FK nullable</span></div>
+        <div class="db-field">comment<span>text nullable</span></div>
+        <div class="db-field">created_at<span>timestamp</span></div>
+        <div class="db-field">admin_user_id<span>FK nullable (кто сделал)</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-green">delivery_zones</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">name<span>varchar</span></div>
+        <div class="db-field">polygon<span>JSON (GeoJSON)</span></div>
+        <div class="db-field">color<span>varchar #hex</span></div>
+        <div class="db-field">delivery_price<span>int</span></div>
+        <div class="db-field">free_delivery_from<span>int nullable</span></div>
+        <div class="db-field">min_order_sum<span>int nullable</span></div>
+        <div class="db-field">priority<span>int default 0</span></div>
+        <div class="db-field">is_active<span>bool default true</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-green">schedule_entries</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">entry_type<span>"weekday" | "date"</span></div>
+        <div class="db-field">weekday<span>int 1–7 nullable</span></div>
+        <div class="db-field">specific_date<span>date nullable</span></div>
+        <div class="db-field">delivery_start<span>time (UTC+7)</span></div>
+        <div class="db-field">delivery_end<span>time (UTC+7)</span></div>
+        <div class="db-field">slot_interval_min<span>int (10/15/30/60/90/120)</span></div>
+        <div class="db-field">deadline_days_before<span>int (0/1/2/3)</span></div>
+        <div class="db-field">deadline_time<span>time (UTC+7)</span></div>
+        <div class="db-field">is_active<span>bool default true</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-coral">stories</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">title<span>varchar</span></div>
+        <div class="db-field">cover_image<span>varchar url</span></div>
+        <div class="db-field">sort_order<span>int</span></div>
+        <div class="db-field">is_visible<span>bool</span></div>
+        <div class="db-field">expires_at<span>timestamp nullable</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-coral">story_slides</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">story_id<span>FK → stories</span></div>
+        <div class="db-field">image_url<span>varchar</span></div>
+        <div class="db-field">text<span>text nullable</span></div>
+        <div class="db-field">text_color<span>#hex nullable</span></div>
+        <div class="db-field">btn_label<span>varchar nullable</span></div>
+        <div class="db-field">btn_url<span>varchar nullable</span></div>
+        <div class="db-field">sort_order<span>int</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-gray">site_settings</div>
+        <div class="db-field"><strong>key</strong><span>PK varchar</span></div>
+        <div class="db-field">value<span>text</span></div>
+        <div class="db-field colspan="2" style="font-size:11px;color:#888780;font-style:italic">Хранит: metrika_id, webvisor, ecom_enabled, head_scripts, body_scripts, cashback_max_pct, yandex_verification</div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-head dh-gray">admin_users</div>
+        <div class="db-field"><strong>id</strong><span>PK serial</span></div>
+        <div class="db-field">username<span>unique varchar</span></div>
+        <div class="db-field">password_hash<span>bcrypt</span></div>
+        <div class="db-field">is_active<span>bool</span></div>
+        <div class="db-field">last_login<span>timestamp</span></div>
+      </div>
+
+    </div>
+    <div class="note" style="margin-top:.65rem"><strong>Важно:</strong> цены хранятся в целых числах (копейки или рубли — выбрать одно на старте и не менять). Рекомендуется рубли как int для простоты. Все временны́е поля в UTC, отображение переводится в UTC+7 на уровне приложения.</div>
+  </div>
+
+  <!-- ====== КАТАЛОГ ====== -->
+  <div class="section" id="catalog">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <div class="section-title">Каталог и поиск <span>— главная страница</span></div>
+    </div>
+    <div class="card">
+      <h3>Layout (референс — samokat.ru)</h3>
+      <div class="row"><span class="badge b-blue">Сайдбар</span> Список категорий слева с иконками. Клик — фильтрует без перезагрузки (fetch + замена контента).</div>
+      <div class="row"><span class="badge b-blue">Сторис</span> Горизонтальный ряд кружков над каталогом. Клик — полноэкранный просмотр.</div>
+      <div class="row"><span class="badge b-blue">Подкатегории</span> Горизонтальные пилюли-теги под заголовком страницы (по меткам товаров).</div>
+      <div class="row"><span class="badge b-blue">Секция «Часто заказывают»</span> Товары с меткой label_popular — выводятся первой секцией выше остальных.</div>
+      <div class="row"><span class="badge b-blue">Основная сетка</span> Карточки товаров: фото, название, вес, цена, кнопка «+».</div>
+      <div class="row"><span class="badge b-blue">Поиск</span> Глобальный в хедере. По названию и описанию. Без перезагрузки (debounce 300ms + fetch).</div>
+      <div class="row"><span class="badge b-blue">Корзина</span> Иконка в хедере с количеством. Клик → drawer справа.</div>
+    </div>
+    <div class="card">
+      <h3>API эндпоинты каталога</h3>
+      <div class="row"><span class="badge b-teal">GET /</span> SSR главная страница с каталогом</div>
+      <div class="row"><span class="badge b-teal">GET /api/products</span> JSON список. Параметры: <code>?category=slug&search=текст&label=popular</code></div>
+      <div class="row"><span class="badge b-teal">GET /category/{slug}</span> SSR страница категории (для SEO)</div>
+    </div>
+    <div class="card">
+      <h3>Метки товаров в UI</h3>
+      <div class="tags">
+        <span class="tag tag-pop">⭐ Часто заказывают</span>
+        <span class="tag tag-halal">☪ Халяль</span>
+        <span class="tag tag-post">✝ Пост</span>
+        <span class="tag tag-new">🆕 Новинка</span>
+        <span class="tag tag-kids">🧒 Детям</span>
+        <span class="tag tag-vegan">🌿 Vegan</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== КАРТОЧКА ТОВАРА ====== -->
+  <div class="section" id="product">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <div class="section-title">Карточка товара <span>— модальное окно + SSR</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-purple">Механика</span> Клик на карточку → модал поверх каталога + <code>history.pushState('/product/slug')</code></div>
+      <div class="row"><span class="badge b-purple">Прямой URL</span> GET /product/{slug} → FastAPI рендерит полный HTML с мета-тегами (SSR, не 404)</div>
+      <div class="row"><span class="badge b-purple">Закрытие</span> Крестик / фон → <code>history.back()</code>, каталог остаётся на месте</div>
+      <div class="row"><span class="badge b-purple">Fetch-режим</span> Запрос с заголовком <code>X-Modal: true</code> → возвращает JSON с данными товара</div>
+      <hr>
+      <div class="row"><span class="badge b-blue">Галерея</span> Несколько фото, переключение точками внизу</div>
+      <div class="row"><span class="badge b-blue">Заголовок</span> Название + вес/объём серым</div>
+      <div class="row"><span class="badge b-blue">Варианты</span> Пилюли-кнопки (если есть группа). Клик — обновляет данные в модале через fetch.</div>
+      <div class="row"><span class="badge b-blue">КБЖУ</span> Блок «В 100 граммах» — 4 колонки: Ккал / Белки / Жиры / Углеводы</div>
+      <div class="row"><span class="badge b-blue">Состав</span> Текст, сворачивается если длинный (кнопка «Показать полностью»)</div>
+      <div class="row"><span class="badge b-blue">Доп. инфо</span> Срок хранения, условия хранения</div>
+      <div class="row"><span class="badge b-blue">Рекомендации</span> «Что ещё пригодится» — горизонтальный скролл карточек из той же категории</div>
+      <div class="row"><span class="badge b-green">Кнопка</span> Фиксированная внизу модала. Пустая корзина → «Добавить X ₽». После добавления → счётчик «− 2 +»</div>
+    </div>
+  </div>
+
+  <!-- ====== ВАРИАНТЫ ====== -->
+  <div class="section" id="variants">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <div class="section-title">Группы товаров и варианты <span>— «Котлета с пюре / с гречкой»</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-purple">Принцип</span> В БД — отдельные товары. В UI — одна карточка с пилюлями выбора варианта.</div>
+      <div class="row"><span class="badge b-purple">В каталоге</span> Показывается ОДИН товар от группы (default_product_id). Остальные скрыты.</div>
+      <div class="row"><span class="badge b-purple">В модале</span> Все варианты группы → пилюли. Клик → fetch данных выбранного варианта (фото, цена, вес меняются).</div>
+      <div class="row"><span class="badge b-purple">URL</span> При переключении варианта → <code>history.replaceState('/product/new-slug')</code></div>
+      <div class="row"><span class="badge b-purple">Корзина</span> Добавляется конкретный product_id выбранного варианта</div>
+      <div class="row"><span class="badge b-purple">SEO</span> Каждый вариант = свой slug = своя SSR-страница = индексируется</div>
+      <div class="note"><strong>Запрос в каталог:</strong> <code>SELECT DISTINCT ON (group_id) * FROM products WHERE is_visible=true AND is_deleted=false ORDER BY group_id, sort_order</code> — один товар от группы. Товары без group_id показываются все.</div>
+    </div>
+  </div>
+
+  <!-- ====== КОРЗИНА ====== -->
+  <div class="section" id="cart">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <div class="section-title">Корзина <span>— drawer справа</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-blue">Хранение</span> <code>localStorage</code> как основное. При авторизации — синхронизация с сессией на сервере.</div>
+      <div class="row"><span class="badge b-blue">Структура</span> Список позиций: фото, название, вес, счётчик −/+, цена × кол-во</div>
+      <div class="row"><span class="badge b-blue">Итоги</span> Сумма товаров · стоимость доставки · скидка промокода · списанный кешбэк · <strong>Итого</strong></div>
+      <div class="row"><span class="badge b-blue">Пустая корзина</span> Иллюстрация + текст «Соберите корзину, а мы всё быстро привезём»</div>
+      <div class="row"><span class="badge b-green">CTA</span> Кнопка «Оформить заказ» → /checkout</div>
+      <div class="row"><span class="badge b-amber">Минимум заказа</span> Если сумма < min_order_sum зоны → кнопка неактивна, показываем сколько добавить</div>
+    </div>
+  </div>
+
+  <!-- ====== ОФОРМЛЕНИЕ ====== -->
+  <div class="section" id="checkout">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <div class="section-title">Оформление заказа</div>
+    </div>
+    <div class="card">
+      <h3>Поля формы (по порядку)</h3>
+      <div class="row"><span class="badge b-blue">Телефон</span> Маска <code>+7 (___) ___-__-__</code>. Если авторизован — подставляется автоматически.</div>
+      <div class="row"><span class="badge b-blue">Адрес</span> Поиск через Dadata API (autocomplete). После выбора — точка на карте Leaflet + определение зоны.</div>
+      <div class="row"><span class="badge b-blue">Зона</span> Автоматически после выбора адреса. Показывает: стоимость доставки, порог бесплатной доставки.</div>
+      <div class="row"><span class="badge b-blue">День доставки</span> Пикер дат — только доступные дни (из /api/schedule/available-days).</div>
+      <div class="row"><span class="badge b-blue">Время доставки</span> Слоты для выбранного дня (/api/schedule/slots?date=YYYY-MM-DD).</div>
+      <div class="row"><span class="badge b-blue">Оплата</span> Радиокнопки: Онлайн (ЮКасса) · Терминал · Наличные + поле «Сдача с ___»</div>
+      <div class="row"><span class="badge b-amber">Промокод</span> Поле + «Применить» → валидация на сервере → результат инлайн</div>
+      <div class="row"><span class="badge b-amber">Кешбэк</span> Баланс кешбэка + чекбокс «Использовать N ₽» (до X% от суммы, настройка cashback_max_pct)</div>
+    </div>
+    <div class="card">
+      <h3>API оформления</h3>
+      <div class="row"><span class="badge b-teal">GET /api/schedule/available-days</span> Ближайшие 14 дней с флагом доступности</div>
+      <div class="row"><span class="badge b-teal">GET /api/schedule/slots</span> <code>?date=2026-06-09</code> → список временны́х слотов</div>
+      <div class="row"><span class="badge b-teal">POST /api/address/detect-zone</span> <code>{lat, lon}</code> → зона, цена, мин. сумма</div>
+      <div class="row"><span class="badge b-teal">POST /api/promocode/validate</span> <code>{code, cart_total}</code> → скидка или ошибка</div>
+      <div class="row"><span class="badge b-teal">POST /api/orders</span> Создание заказа → возвращает order_id + redirect URL (для ЮКассы) или страницу подтверждения</div>
+    </div>
+  </div>
+
+  <!-- ====== РАСПИСАНИЕ ====== -->
+  <div class="section" id="schedule">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <div class="section-title">Расписание доставки <span>— слоты и дедлайны</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-amber">Часовой пояс</span> Все операции в UTC+7 (Томск). Хранить и сравнивать только в UTC+7.</div>
+      <div class="row"><span class="badge b-blue">Тип 1 — Дефолтный</span> Привязан к дню недели (1–7). Повторяется каждую неделю. Несколько записей на один день — разрешено.</div>
+      <div class="row"><span class="badge b-green">Тип 2 — Конкретная дата</span> Приоритет выше дефолтного. Перекрывает дефолт для указанной даты полностью.</div>
+      <div class="row"><span class="badge b-blue">Слоты</span> Диапазон доставки / интервал = список слотов. Пример: 19:00–21:00 / 1ч = [19–20, 20–21]</div>
+      <div class="row"><span class="badge b-coral">Дедлайн</span> <code>deadline_dt = delivery_date − deadline_days_before (days) + deadline_time</code></div>
+      <div class="row"><span class="badge b-gray">Варианты дедлайна</span> В тот же день (0), за день (1), за 2 дня (2), за 3 дня (3)</div>
+      <div class="row"><span class="badge b-gray">День без записей</span> = выходной. Не отображается в пикере дат.</div>
+      <div class="note"><strong>Алгоритм:</strong> для каждой из ближайших 14 дат: 1) ищем записи по конкретной дате → если есть, используем только их; 2) иначе — дефолт дня недели; 3) для каждой записи проверяем <code>now(UTC+7) ≤ deadline_dt</code>; 4) генерируем слоты из диапазона. Возвращаем даты с флагом has_slots.</div>
+    </div>
+  </div>
+
+  <!-- ====== АВТОРИЗАЦИЯ ====== -->
+  <div class="section" id="auth">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <div class="section-title">Авторизация <span>— OTP по телефону</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-purple">Метод</span> Только телефон + OTP. Без паролей. Первый вход = авторегистрация.</div>
+      <div class="row"><span class="badge b-purple">Каналы OTP</span> Пользователь выбирает: MAX (через MAX Business API) или Telegram-бот</div>
+      <div class="row"><span class="badge b-purple">Код</span> 4-значный. Живёт 5 минут. Максимум 3 попытки, затем новый запрос.</div>
+      <div class="row"><span class="badge b-purple">Сессия</span> JWT в httpOnly cookie, TTL 30 дней.</div>
+      <div class="row"><span class="badge b-purple">Telegram привязка</span> Deeplink → /start в боте → бот получает chat_id → привязывает к аккаунту по токену.</div>
+      <div class="flow">
+        <span class="flow-step">Ввод телефона</span><span class="flow-arr">→</span>
+        <span class="flow-step">Выбор канала</span><span class="flow-arr">→</span>
+        <span class="flow-step">OTP отправлен</span><span class="flow-arr">→</span>
+        <span class="flow-step">Ввод кода</span><span class="flow-arr">→</span>
+        <span class="flow-step green">JWT выдан ✓</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== ЛИЧНЫЙ КАБИНЕТ ====== -->
+  <div class="section" id="account">
+    <div class="section-header">
+      <div class="section-num">11</div>
+      <div class="section-title">Личный кабинет</div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-blue">Разделы</span> Главная ЛК · Мои заказы · Детали заказа · Кешбэк · Уведомления · Профиль</div>
+      <div class="row"><span class="badge b-blue">Заказы</span> Список со статусами и оплатой. Кнопка «Отменить» — только у статуса «Новый».</div>
+      <div class="row"><span class="badge b-blue">Детали заказа</span> Состав, адрес, слот, способ оплаты, применённый промокод, движение кешбэка по заказу.</div>
+      <div class="row"><span class="badge b-purple">Кешбэк</span> Текущий баланс + история транзакций (тип, сумма, дата, заказ/комментарий).</div>
+      <div class="row"><span class="badge b-teal">Уведомления</span> 6 переключателей: 2 типа × 3 канала (email/MAX/TG). Рекламные — default OFF.</div>
+      <div class="row"><span class="badge b-gray">Профиль</span> Имя, email (для уведомлений), телефон (только просмотр).</div>
+    </div>
+  </div>
+
+  <!-- ====== ЗОНЫ ====== -->
+  <div class="section" id="zones">
+    <div class="section-header">
+      <div class="section-num">12</div>
+      <div class="section-title">Зоны доставки</div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-teal">Хранение</span> GeoJSON-полигоны в PostgreSQL (поле JSON). Каждая зона — замкнутый полигон.</div>
+      <div class="row"><span class="badge b-teal">Определение зоны</span> Python-библиотека Shapely: <code>Point(lon, lat).within(Polygon(coords))</code></div>
+      <div class="row"><span class="badge b-teal">Несколько зон</span> Если точка в нескольких — берётся зона с наибольшим priority.</div>
+      <div class="row"><span class="badge b-teal">Вне зон</span> Сообщение «Доставка в ваш район пока недоступна».</div>
+      <div class="row"><span class="badge b-teal">Параметры зоны</span> Название, цена доставки, мин. сумма для бесплатной доставки, мин. сумма заказа.</div>
+    </div>
+  </div>
+
+  <!-- ====== ОПЛАТА ====== -->
+  <div class="section" id="payment">
+    <div class="section-header">
+      <div class="section-num">13</div>
+      <div class="section-title">Оплата <span>— ЮКасса + наличные + терминал</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-green">ЮКасса</span> SDK yookassa. При создании заказа → создаём Payment → редирект на confirmation_url.</div>
+      <div class="row"><span class="badge b-green">Webhook</span> POST /api/payment/callback → проверяем подпись → обновляем payment_status = 'paid' → начисляем кешбэк → уведомляем клиента.</div>
+      <div class="row"><span class="badge b-gray">Терминал / наличные</span> Заказ создаётся сразу. payment_status = 'pending'. Оператор подтверждает оплату вручную в админке.</div>
+      <div class="row"><span class="badge b-coral">Отмена онлайн</span> Клиент отменяет → API ЮКассы refund → payment_status = 'refunded'.</div>
+    </div>
+  </div>
+
+  <!-- ====== ПРОМОКОДЫ И КЕШБЭК ====== -->
+  <div class="section" id="promo">
+    <div class="section-header">
+      <div class="section-num">14</div>
+      <div class="section-title">Промокоды и кешбэк</div>
+    </div>
+    <div class="promo-grid">
+      <div class="promo-card pc-1">
+        <h4>Тип 1 — Скидка %</h4>
+        <p>Скидывает X% с суммы заказа. Настройки: %, период, лимит использований, мин. сумма заказа.</p>
+      </div>
+      <div class="promo-card pc-2">
+        <h4>Тип 2 — Кешбэк покупателю</h4>
+        <p>После доставки начисляется X% от суммы заказа на кешбэк-счёт покупателя.</p>
+      </div>
+      <div class="promo-card pc-3">
+        <h4>Тип 3 — Реферальный</h4>
+        <p>Покупатель получает X% кешбэка. Владелец кода (блогер) получает Y% с каждой покупки по его коду.</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:.6rem">
+      <div class="row"><span class="badge b-purple">Трата кешбэка</span> До <code>cashback_max_pct</code>% от суммы заказа (глобальная настройка в site_settings).</div>
+      <div class="row"><span class="badge b-purple">Начисление</span> Только после статуса «Доставлен». Не при создании заказа.</div>
+      <div class="row"><span class="badge b-purple">Вывод (блогер)</span> Оператор вручную уменьшает баланс в админке → тип транзакции «withdraw» с комментарием.</div>
+      <div class="row"><span class="badge b-purple">История</span> Полный лог cashback_transactions — виден пользователю в ЛК и оператору в админке.</div>
+    </div>
+  </div>
+
+  <!-- ====== ЖИЗНЕННЫЙ ЦИКЛ ====== -->
+  <div class="section" id="lifecycle">
+    <div class="section-header">
+      <div class="section-num">15</div>
+      <div class="section-title">Жизненный цикл заказа</div>
+    </div>
+    <div class="card">
+      <table class="lc-table">
+        <thead><tr><th width="130">Статус</th><th>Кто меняет</th><th>Уведомление клиенту</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="status-pill s-new">🆕 Новый</span></td>
+            <td>Автоматически при оформлении (ЮКасса — после webhook)</td>
+            <td><span class="nc nc-email">Email</span><span class="nc nc-tg">TG</span><span class="nc nc-max">MAX</span> «Заказ №X принят! Доставим [дата] [слот]»</td>
+          </tr>
+          <tr>
+            <td><span class="status-pill s-accepted">✅ Принят</span></td>
+            <td>Оператор вручную в админке</td>
+            <td><span class="nc nc-email">Email</span><span class="nc nc-tg">TG</span><span class="nc nc-max">MAX</span> «Заказ №X принят в работу. Готовим!»</td>
+          </tr>
+          <tr>
+            <td><span class="status-pill s-delivery">🚗 Доставляется</span></td>
+            <td>Оператор — когда курьер выехал</td>
+            <td><span class="nc nc-email">Email</span><span class="nc nc-tg">TG</span><span class="nc nc-max">MAX</span> «Курьер уже едет! Прибудет [слот]»</td>
+          </tr>
+          <tr>
+            <td><span class="status-pill s-done">✓ Доставлен</span></td>
+            <td>Оператор. <strong>Триггер кешбэка.</strong></td>
+            <td><span class="nc nc-email">Email</span><span class="nc nc-tg">TG</span><span class="nc nc-max">MAX</span> «Доставлен! Приятного аппетита 🍽 +N₽ кешбэка»</td>
+          </tr>
+          <tr>
+            <td><span class="status-pill s-canceled">✕ Отменён</span></td>
+            <td>Клиент (только «Новый») или оператор (любой статус)</td>
+            <td><span class="nc nc-email">Email</span><span class="nc nc-tg">TG</span><span class="nc nc-max">MAX</span> «Заказ №X отменён. [причина]. Возврат 3–5 дней»</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note" style="margin-top:.65rem">При отмене: использованный кешбэк возвращается на баланс. Счётчик использований промокода decrements. Онлайн-оплата → автовозврат через ЮКассу API.</div>
+    </div>
+  </div>
+
+  <!-- ====== УВЕДОМЛЕНИЯ ====== -->
+  <div class="section" id="notifications">
+    <div class="section-header">
+      <div class="section-num">16</div>
+      <div class="section-title">Уведомления <span>— Email · MAX · Telegram</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-teal">Email</span> SMTP. Шаблоны Jinja2 (HTML-письма). Поле users.email — указывается в профиле ЛК.</div>
+      <div class="row"><span class="badge b-teal">MAX</span> MAX Business API. Привязан к номеру телефона аккаунта. Документация: MAX бизнес-API.</div>
+      <div class="row"><span class="badge b-teal">Telegram</span> Bot API. Поле users.tg_chat_id заполняется через deeplink при подключении бота в ЛК.</div>
+      <div class="row"><span class="badge b-amber">Транзакционные</span> При каждой смене статуса заказа — если канал включён в notification_settings.</div>
+      <div class="row"><span class="badge b-amber">Рекламные</span> Только с явного согласия (default OFF). Рассылка — вручную из админки или отдельный скрипт.</div>
+      <div class="row"><span class="badge b-gray">Очередь</span> Уведомления отправляются через BackgroundTasks FastAPI (или отдельный worker-контейнер).</div>
+    </div>
+  </div>
+
+  <!-- ====== СТОРИС ====== -->
+  <div class="section" id="stories">
+    <div class="section-header">
+      <div class="section-num">17</div>
+      <div class="section-title">Сторис <span>— как у Самоката</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-pink">UI</span> Горизонтальный ряд кружков над каталогом. Видны всем пользователям (авторизованным и нет).</div>
+      <div class="row"><span class="badge b-pink">Просмотр</span> Клик на кружок → полноэкранный слайдер. Переключение слайдов: тап/стрелки/таймер.</div>
+      <div class="row"><span class="badge b-pink">Слайд</span> Фото + текст + опциональная кнопка со ссылкой.</div>
+      <div class="row"><span class="badge b-pink">Автоскрытие</span> Если задана expires_at и время вышло — сторис не показывается (проверка при отдаче).</div>
+    </div>
+  </div>
+
+  <!-- ====== АДМИН-ПАНЕЛЬ ====== -->
+  <div class="section" id="admin">
+    <div class="section-header">
+      <div class="section-num">18</div>
+      <div class="section-title">Админ-панель <span>— структура разделов</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-gray">Доступ</span> Отдельный логин/пароль (bcrypt). Один уровень доступа — всё могут все. Путь: /admin/</div>
+      <div class="row"><span class="badge b-blue">Заказы</span> Дашборд (виджеты + новые заказы) · Список с фильтрами · Карточка · Смена статуса · Отчёты</div>
+      <div class="row"><span class="badge b-blue">Товары</span> CRUD. Поля: название, категория, группа+вариант, цена, вес, КБЖУ, описание, состав, срок хранения, условия, фото (несколько, сортировка), 6 меток, is_visible.</div>
+      <div class="row"><span class="badge b-blue">Категории</span> CRUD + drag-and-drop сортировка (sort_order).</div>
+      <div class="row"><span class="badge b-blue">Клиенты</span> Список · Карточка · История заказов · Кешбэк-баланс с ручной правкой · История кешбэка · Блокировка.</div>
+      <div class="row"><span class="badge b-purple">Промокоды</span> CRUD для всех трёх типов. Привязка владельца для реферального типа.</div>
+      <div class="row"><span class="badge b-purple">Кешбэк</span> Общий баланс системы · Запросы на вывод · Ручная правка баланса · Общий лог транзакций.</div>
+      <div class="row"><span class="badge b-pink">Сторис</span> CRUD + drag-and-drop сортировка + управление слайдами + дата окончания.</div>
+      <div class="row"><span class="badge b-teal">Зоны доставки</span> Leaflet-карта + Leaflet.draw → рисование полигонов + параметры зоны.</div>
+      <div class="row"><span class="badge b-amber">Расписание</span> Список записей (тип/привязка/диапазон/дедлайн/интервал) + предпросмотр слотов на 7 дней.</div>
+      <div class="row"><span class="badge b-amber">Аналитика</span> Форма настройки Я.Метрики, вебвизора, e-commerce, head/body скриптов.</div>
+    </div>
+    <div class="card">
+      <h3>Отчёты (раздел «Заказы → Отчёты»)</h3>
+      <div class="row"><span class="badge b-blue">Выручка</span> По дням / неделям / месяцам. Фильтр по зоне и оплате. Экспорт CSV.</div>
+      <div class="row"><span class="badge b-blue">Топ товаров</span> По количеству заказов за период.</div>
+      <div class="row"><span class="badge b-blue">Клиенты</span> Новые vs повторные. Средний чек.</div>
+      <div class="row"><span class="badge b-blue">Промокоды</span> Применения, сумма скидок, начисленный кешбэк.</div>
+      <div class="row"><span class="badge b-blue">Зоны</span> Заказы и выручка по зонам доставки.</div>
+    </div>
+  </div>
+
+  <!-- ====== SEO ====== -->
+  <div class="section" id="seo">
+    <div class="section-header">
+      <div class="section-num">19</div>
+      <div class="section-title">SEO</div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-teal">Главная</span> title: «Вкусно — доставка еды по Томску» · description: «Готовая еда с доставкой по Томску. Заказывайте онлайн.»</div>
+      <div class="row"><span class="badge b-teal">Категория /category/slug</span> Динамически из БД: «[Категория] с доставкой в Томске · Вкусно»</div>
+      <div class="row"><span class="badge b-teal">Товар /product/slug</span> «[Название] [вес] — купить с доставкой · Вкусно Томск». SSR с мета-тегами.</div>
+      <div class="row"><span class="badge b-red">noindex</span> /cart, /checkout, /account/*, /admin/*</div>
+      <div class="row"><span class="badge b-teal">OG-теги</span> og:title, og:description, og:image (первое фото товара), og:url на каждой странице.</div>
+      <div class="row"><span class="badge b-teal">Schema.org</span> JSON-LD с типом Product на странице товара: name, description, image, offers (price, currency, availability), nutrition.</div>
+      <div class="row"><span class="badge b-teal">sitemap.xml</span> Автогенерация: главная + категории + активные товары. Эндпоинт GET /sitemap.xml</div>
+      <div class="row"><span class="badge b-teal">robots.txt</span> Закрыть: /admin/, /api/, /cart, /checkout, /account/</div>
+      <div class="row"><span class="badge b-teal">Canonical</span> &lt;link rel="canonical"&gt; на каждой странице.</div>
+      <div class="row"><span class="badge b-teal">ЧПУ</span> /category/goryachie-blyuda · /product/kotleta-kurinaya-s-pyure</div>
+      <div class="row"><span class="badge b-teal">Скорость</span> WebP + lazy loading для фото. Cache-Control для статики. Минификация CSS/JS.</div>
+    </div>
+  </div>
+
+  <!-- ====== МЕТРИКИ ====== -->
+  <div class="section" id="metrics">
+    <div class="section-header">
+      <div class="section-num">20</div>
+      <div class="section-title">Метрики и аналитика <span>— раздел в админке</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-amber">Хранение</span> Таблица site_settings (key-value). Значения вставляются в &lt;head&gt; всех страниц через Jinja2.</div>
+      <div class="row"><span class="badge b-amber">Я.Метрика</span> Номер счётчика + флаги: вебвизор, электронная коммерция (e-commerce).</div>
+      <div class="row"><span class="badge b-amber">Электронная коммерция</span> dataLayer события: view_item · add_to_cart · remove_from_cart · begin_checkout · purchase</div>
+      <div class="row"><span class="badge b-amber">Я.Вебмастер</span> Мета-тег верификации yandex-verification.</div>
+      <div class="row"><span class="badge b-amber">Произвольный head</span> Поле head_scripts — raw HTML без экранирования (GTM и др.)</div>
+      <div class="row"><span class="badge b-amber">Произвольный body</span> Поле body_scripts — перед &lt;/body&gt; (чаты, пиксели и др.)</div>
+      <div class="note"><strong>E-commerce события:</strong> view_item — открытие модала товара; add_to_cart — нажатие «+»; begin_checkout — переход на /checkout; purchase — после POST /api/orders с order_id, revenue, списком товаров.</div>
+    </div>
+  </div>
+
+  <!-- ====== DOCKER ====== -->
+  <div class="section" id="docker">
+    <div class="section-header">
+      <div class="section-num">21</div>
+      <div class="section-title">Деплой <span>— Timeweb VPS · Ubuntu 24.04 LTS · Docker</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="badge b-gray">ОС</span> Ubuntu 24.04 LTS. Поддержка до 2029. Python 3.12 из коробки. Актуальный Docker.</div>
+      <div class="row"><span class="badge b-gray">Docker Compose</span> 4 сервиса: web (FastAPI) · db (PostgreSQL 16) · nginx · worker (уведомления)</div>
+      <div class="row"><span class="badge b-gray">SSL</span> Let's Encrypt через Certbot (certbot --nginx). Авторенёв cronjob.</div>
+      <div class="row"><span class="badge b-gray">Статика</span> /static/ и /media/ отдаются Nginx напрямую, не через FastAPI.</div>
+      <div class="row"><span class="badge b-gray">Переменные</span> .env файл (не в репозитории). Секреты: DB, ЮКасса, Dadata, TG, MAX, SMTP.</div>
+      <div class="row"><span class="badge b-gray">Бэкапы</span> Cronjob: pg_dump раз в день → сохраняем на VPS + опционально в S3/облако.</div>
+      <div class="row"><span class="badge b-gray">Логи</span> Docker logs + файловые логи FastAPI (rotating). Nginx access/error logs.</div>
+    </div>
+    <div class="code-block">
+<span class="cmt"># Структура проекта</span><br>
+vkusno/<br>
+├── <span class="kw">app/</span><br>
+│&nbsp;&nbsp; ├── main.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt"># FastAPI app, роутеры</span><br>
+│&nbsp;&nbsp; ├── models.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt"># SQLAlchemy модели</span><br>
+│&nbsp;&nbsp; ├── schemas.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt"># Pydantic схемы</span><br>
+│&nbsp;&nbsp; ├── crud.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt"># DB операции</span><br>
+│&nbsp;&nbsp; ├── <span class="kw">routers/</span><br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── catalog.py &nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt"># GET /, /category/, /product/</span><br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── cart.py<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── orders.py<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── auth.py<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── account.py<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── payment.py &nbsp;&nbsp;&nbsp;<span class="cmt"># ЮКасса webhook</span><br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── schedule.py<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; └── admin/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt"># все роутеры админки</span><br>
+│&nbsp;&nbsp; ├── <span class="kw">templates/</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt"># Jinja2 шаблоны</span><br>
+│&nbsp;&nbsp; ├── <span class="kw">static/</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt"># CSS, JS, иконки</span><br>
+│&nbsp;&nbsp; ├── services/<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── notifications.py <span class="cmt"># email/TG/MAX</span><br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── yookassa.py<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── dadata.py<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; └── schedule.py &nbsp;&nbsp;<span class="cmt"># генерация слотов</span><br>
+│&nbsp;&nbsp; └── database.py<br>
+├── <span class="kw">media/</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt"># загруженные фото</span><br>
+├── alembic/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt"># миграции БД</span><br>
+├── docker-compose.yml<br>
+├── Dockerfile<br>
+├── nginx.conf<br>
+└── .env
+    </div>
+  </div>
+
+  <!-- ====== ПОРЯДОК РЕАЛИЗАЦИИ ====== -->
+  <div class="section" id="roadmap">
+    <div class="section-header">
+      <div class="section-num">22</div>
+      <div class="section-title">Порядок реализации <span>— для Claude Code</span></div>
+    </div>
+
+    <div class="highlight">
+      <h3>Принцип: рабочий результат на каждом шаге</h3>
+      <p>Каждый этап заканчивается рабочим состоянием приложения. Следующий этап добавляет функциональность поверх предыдущего.</p>
+    </div>
+
+    <div class="roadmap">
+      <div class="rm-step">
+        <div class="rm-num">1</div>
+        <div class="rm-body">
+          <h4>Инфраструктура и скелет проекта</h4>
+          <p>Docker Compose (web + db + nginx). FastAPI с роутерами-заглушками. SQLAlchemy + Alembic. Все модели БД и первая миграция. .env. Nginx конфиг.</p>
+          <div class="rm-tags"><span class="rm-tag">Docker</span><span class="rm-tag">FastAPI</span><span class="rm-tag">PostgreSQL</span><span class="rm-tag">Alembic</span><span class="rm-tag">Nginx</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">2</div>
+        <div class="rm-body">
+          <h4>Каталог товаров (read-only)</h4>
+          <p>Главная страница с каталогом (SSR Jinja2). Сайдбар категорий. Сетка карточек товаров. Поиск (fetch без перезагрузки). Фильтр по категории. Нативный CSS — дизайн как у Самоката.</p>
+          <div class="rm-tags"><span class="rm-tag">Jinja2</span><span class="rm-tag">CSS</span><span class="rm-tag">Fetch API</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">3</div>
+        <div class="rm-body">
+          <h4>Карточка товара + варианты</h4>
+          <p>Модал с history.pushState. SSR для /product/slug. Галерея фото. КБЖУ блок. Группы товаров и пилюли вариантов. Рекомендации (горизонтальный скролл).</p>
+          <div class="rm-tags"><span class="rm-tag">Modal</span><span class="rm-tag">history.pushState</span><span class="rm-tag">SSR</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">4</div>
+        <div class="rm-body">
+          <h4>Корзина</h4>
+          <p>localStorage. Drawer справа. Добавление/удаление позиций. Счётчик в хедере. Итоговые суммы. Кнопка оформления (ведёт на заглушку).</p>
+          <div class="rm-tags"><span class="rm-tag">localStorage</span><span class="rm-tag">Drawer UI</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">5</div>
+        <div class="rm-body">
+          <h4>Зоны доставки</h4>
+          <p>Модели и CRUD зон в БД. Сохранение GeoJSON. Endpoint /api/address/detect-zone с Shapely. Интеграция с Dadata (автодополнение адреса). Leaflet-карта на странице оформления.</p>
+          <div class="rm-tags"><span class="rm-tag">GeoJSON</span><span class="rm-tag">Shapely</span><span class="rm-tag">Dadata</span><span class="rm-tag">Leaflet</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">6</div>
+        <div class="rm-body">
+          <h4>Расписание доставки</h4>
+          <p>Модели schedule_entries. Алгоритм генерации слотов с учётом дедлайнов (UTC+7). Эндпоинты /api/schedule/available-days и /api/schedule/slots. Пикер дат и слотов в форме оформления.</p>
+          <div class="rm-tags"><span class="rm-tag">Schedule</span><span class="rm-tag">UTC+7</span><span class="rm-tag">Slots</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">7</div>
+        <div class="rm-body">
+          <h4>Авторизация (OTP)</h4>
+          <p>Таблица otp_codes. Интеграция MAX Business API и Telegram Bot API. JWT в httpOnly cookie. Форма входа. Deeplink для привязки Telegram.</p>
+          <div class="rm-tags"><span class="rm-tag">OTP</span><span class="rm-tag">JWT</span><span class="rm-tag">MAX API</span><span class="rm-tag">Telegram Bot</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">8</div>
+        <div class="rm-body">
+          <h4>Создание заказа (без оплаты)</h4>
+          <p>POST /api/orders. Валидация всех полей. Сохранение order + order_items (снапшот цен). Страница подтверждения заказа. Синхронизация корзины из localStorage с сессией.</p>
+          <div class="rm-tags"><span class="rm-tag">Orders</span><span class="rm-tag">Validation</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">9</div>
+        <div class="rm-body">
+          <h4>Оплата ЮКасса</h4>
+          <p>Интеграция yookassa SDK. Создание Payment при заказе. Редирект на виджет. Webhook /api/payment/callback с проверкой подписи. Обновление payment_status. Возврат при отмене.</p>
+          <div class="rm-tags"><span class="rm-tag">ЮКасса</span><span class="rm-tag">Webhook</span><span class="rm-tag">Refund</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">10</div>
+        <div class="rm-body">
+          <h4>Промокоды и кешбэк</h4>
+          <p>Модели promocodes, cashback_accounts, cashback_transactions. Валидация промокода. Применение скидки/кешбэка в заказе. Начисление после статуса «Доставлен». Блок в форме оформления.</p>
+          <div class="rm-tags"><span class="rm-tag">Promocodes</span><span class="rm-tag">Cashback</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">11</div>
+        <div class="rm-body">
+          <h4>Уведомления</h4>
+          <p>Worker-сервис. SMTP email с Jinja2-шаблонами. MAX Business API. Telegram Bot. Отправка при смене статуса заказа. Проверка флагов notification_settings.</p>
+          <div class="rm-tags"><span class="rm-tag">SMTP</span><span class="rm-tag">MAX</span><span class="rm-tag">Telegram</span><span class="rm-tag">Worker</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">12</div>
+        <div class="rm-body">
+          <h4>Личный кабинет</h4>
+          <p>Страницы: список заказов, детали заказа, кешбэк с историей, настройки уведомлений, профиль. Кнопка отмены заказа (статус «Новый»). Синхронизация корзины.</p>
+          <div class="rm-tags"><span class="rm-tag">Account</span><span class="rm-tag">History</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">13</div>
+        <div class="rm-body">
+          <h4>Сторис</h4>
+          <p>Модели stories + story_slides. Компонент на главной (кружки + полноэкранный слайдер). Автоскрытие по expires_at.</p>
+          <div class="rm-tags"><span class="rm-tag">Stories</span><span class="rm-tag">Slider</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">14</div>
+        <div class="rm-body">
+          <h4>Админ-панель — заказы и клиенты</h4>
+          <p>Авторизация администратора (login/password). Дашборд с виджетами. Список заказов с фильтрами. Смена статуса. Карточка клиента с историей. Ручная правка кешбэка. Отчёты (CSV экспорт).</p>
+          <div class="rm-tags"><span class="rm-tag">Admin</span><span class="rm-tag">Dashboard</span><span class="rm-tag">Reports</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">15</div>
+        <div class="rm-body">
+          <h4>Админ-панель — товары и категории</h4>
+          <p>CRUD товаров (с загрузкой фото). Управление группами/вариантами. CRUD категорий с drag-and-drop сортировкой. Управление метками. Поле is_visible.</p>
+          <div class="rm-tags"><span class="rm-tag">CRUD</span><span class="rm-tag">File Upload</span><span class="rm-tag">Drag-and-drop</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">16</div>
+        <div class="rm-body">
+          <h4>Админ-панель — промокоды, кешбэк, сторис, расписание</h4>
+          <p>CRUD промокодов (3 типа). Управление выводом кешбэка блогеров. CRUD сторис со слайдами. CRUD расписания с предпросмотром слотов.</p>
+          <div class="rm-tags"><span class="rm-tag">Promocodes</span><span class="rm-tag">Stories Admin</span><span class="rm-tag">Schedule Admin</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">17</div>
+        <div class="rm-body">
+          <h4>Зоны доставки в админке</h4>
+          <p>Leaflet-карта с Leaflet.draw. Рисование и редактирование полигонов. Сохранение GeoJSON. Настройка параметров зоны. Цветовое различение зон на карте.</p>
+          <div class="rm-tags"><span class="rm-tag">Leaflet.draw</span><span class="rm-tag">GeoJSON</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">18</div>
+        <div class="rm-body">
+          <h4>SEO и метрики</h4>
+          <p>Мета-теги и OG для всех страниц. Schema.org JSON-LD на товарах. sitemap.xml (автогенерация). robots.txt. Раздел «Аналитика» в админке (Я.Метрика + dataLayer события + произвольные скрипты).</p>
+          <div class="rm-tags"><span class="rm-tag">SEO</span><span class="rm-tag">Schema.org</span><span class="rm-tag">Я.Метрика</span><span class="rm-tag">dataLayer</span></div>
+        </div>
+      </div>
+      <div class="rm-step">
+        <div class="rm-num">19</div>
+        <div class="rm-body">
+          <h4>Финальная отделка и деплой</h4>
+          <p>Оптимизация изображений (конвертация в WebP). lazy loading. Cache-Control для статики. Минификация CSS/JS. Certbot SSL. Настройка pg_dump cronjob. Финальное тестирование всех флоу.</p>
+          <div class="rm-tags"><span class="rm-tag">WebP</span><span class="rm-tag">SSL</span><span class="rm-tag">Backup</span><span class="rm-tag">Performance</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const items = document.querySelectorAll('.nav-item');
+const sections = document.querySelectorAll('.section[id]');
+function onScroll() {
+  let current = '';
+  sections.forEach(s => { if (window.scrollY >= s.offsetTop - 80) current = s.id; });
+  items.forEach(i => {
+    i.classList.toggle('active', i.getAttribute('href') === '#' + current);
+  });
+}
+window.addEventListener('scroll', onScroll, { passive: true });
+items.forEach(i => i.addEventListener('click', e => {
+  e.preventDefault();
+  document.querySelector(i.getAttribute('href')).scrollIntoView({ behavior: 'smooth' });
+}));
+</script>
+</body>
+</html>

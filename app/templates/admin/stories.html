@@ -1,0 +1,49 @@
+{% extends "admin/base.html" %}
+{% block title %}Сторис{% endblock %}
+{% block page_title %}Сторис{% endblock %}
+{% set active = 'stories' %}
+
+{% block topbar_actions %}
+<a href="/admin/stories/new" class="btn btn-primary btn-sm">+ Добавить</a>
+{% endblock %}
+
+{% block content %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+<div class="adm-card" style="padding:0;overflow:hidden">
+  <div class="adm-table-wrap">
+    <table class="adm-table">
+      <thead><tr>
+        <th style="width:72px">Обложка</th><th>Название</th>
+        <th>Слайдов</th><th>Сортировка</th><th>Истекает</th><th>Статус</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for s in stories %}
+      <tr>
+        <td>
+          <img src="/media/{{ s.cover_image }}" style="width:56px;height:56px;object-fit:cover;border-radius:8px">
+        </td>
+        <td><strong>{{ s.title }}</strong></td>
+        <td>{{ s.slides_count }}</td>
+        <td>{{ s.sort_order }}</td>
+        <td style="color:#888;font-size:12px">{{ s.expires_at.strftime('%d.%m.%Y') if s.expires_at else '—' }}</td>
+        <td><span class="badge {% if s.is_visible %}badge-active{% else %}badge-inactive{% endif %}">{% if s.is_visible %}Видна{% else %}Скрыта{% endif %}</span></td>
+        <td>
+          <div class="btn-group">
+            <a href="/admin/stories/{{ s.id }}/edit" class="btn btn-sm btn-secondary">✏️</a>
+            <form method="post" action="/admin/stories/{{ s.id }}/toggle" style="display:inline">
+              <button class="btn btn-sm btn-secondary" type="submit">{% if s.is_visible %}👁‍🗨{% else %}👁{% endif %}</button>
+            </form>
+            <form method="post" action="/admin/stories/{{ s.id }}/delete" style="display:inline">
+              <button class="btn btn-sm btn-danger" type="submit" onclick="return confirm('Удалить сторис?')">🗑</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="color:#aaa;padding:24px;text-align:center">Сторис нет</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

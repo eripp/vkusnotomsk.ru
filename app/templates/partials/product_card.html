@@ -1,0 +1,38 @@
+<article class="product-card" data-slug="{{ p.slug }}" onclick="productModal.open('{{ p.slug }}')">
+  <div class="product-img-wrap">
+    {% if p.image %}
+    <img class="product-img" src="{{ p.image }}" alt="{{ p.name }}" loading="lazy">
+    {% else %}
+    <div class="product-img product-img-placeholder">🍱</div>
+    {% endif %}
+    <!-- Метки -->
+    <div class="product-labels">
+      {% if p.label_popular %}<span class="label label-popular">⭐</span>{% endif %}
+      {% if p.label_halal %}<span class="label label-halal">☪</span>{% endif %}
+      {% if p.label_post %}<span class="label label-post">✦</span>{% endif %}
+      {% if p.label_new %}<span class="label label-new">New</span>{% endif %}
+      {% if p.label_kids %}<span class="label label-kids">👧</span>{% endif %}
+      {% if p.label_vegan %}<span class="label label-vegan">🌿</span>{% endif %}
+    </div>
+  </div>
+  <div class="product-info">
+    <div class="product-name">{{ p.name }}</div>
+    {% if p.weight %}<div class="product-weight">{{ p.weight }}</div>{% endif %}
+    {% if p.kcal or p.protein or p.fat or p.carbs %}
+    <div class="product-nutrition">
+      {% if p.kcal %}<span class="pn-kcal">{{ p.kcal }} ккал</span>{% endif %}
+      <span class="pn-macros">Б {{ p.protein or 0 }} · Ж {{ p.fat or 0 }} · У {{ p.carbs or 0 }}</span>
+    </div>
+    {% endif %}
+    <div class="product-footer">
+      <span class="product-price">{{ p.price }} ₽</span>
+      <button class="add-btn"
+        data-id="{{ p.id }}" data-name="{{ p.name | e }}"
+        data-price="{{ p.price }}" data-image="{{ p.image or '' }}"
+        data-weight="{{ p.weight or '' | e }}"
+        onclick="event.stopPropagation(); cart.addFromBtn(this)">
+        <span class="add-btn-inner" id="add-btn-{{ p.id }}">+</span>
+      </button>
+    </div>
+  </div>
+</article>

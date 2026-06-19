@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}{% if meta_title %}{{ meta_title }}{% else %}Вкусно — доставка еды по Томску{% endif %}{% endblock %}
+
+{% block og_type %}{% if open_product %}product{% else %}website{% endif %}{% endblock %}
+
+{% block og_image %}{% if open_product and open_product.image %}{{ SITE_URL }}/media/{{ open_product.image }}{% else %}{{ SITE_URL }}/static/img/og-default.jpg{% endif %}{% endblock %}
+{% block tw_image %}{% if open_product and open_product.image %}{{ SITE_URL }}/media/{{ open_product.image }}{% else %}{{ SITE_URL }}/static/img/og-default.jpg{% endif %}{% endblock %}
+
+{% block structured_data %}
+{% if open_product %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "{{ open_product.name | e }}",
+  "description": "{{ (open_product.description or open_product.name) | e }}",
+  {% if open_product.image %}"image": "{{ SITE_URL }}/media/{{ open_product.image }}",{% endif %}
+  "offers": {
+    "@type": "Offer",
+    "priceCurrency": "RUB",
+    "price": "{{ open_product.price }}",
+    "availability": "https://schema.org/InStock",
+    "url": "{{ SITE_URL }}/product/{{ open_product.slug }}"
+  }{% if open_product.kcal %},
+  "nutrition": {
+    "@type": "NutritionInformation",
+    "calories": "{{ open_product.kcal }} kcal"{% if open_product.protein %},
+    "proteinContent": "{{ open_product.protein }} g"{% endif %}{% if open_product.fat %},
+    "fatContent": "{{ open_product.fat }} g"{% endif %}{% if open_product.carbs %},
+    "carbohydrateContent": "{{ open_product.carbs }} g"{% endif %}
+  }{% endif %}
+}
+</script>
+{% endif %}
+{% endblock %}
+
+{% block body %}
+
+<!-- ═══ ШАПКА ═══════════════════════════════════════════════════════════ -->
+<header class="header">
+  <div class="header-inner">
+    <a href="/" class="logo"><img src="/static/img/logo.svg" alt="Вкусно — доставка еды по Томску"></a>
+    <div class="search-wrap">
+      <input id="search-input" class="search-input" type="search" placeholder="Найти блюдо…" autocomplete="off">
+    </div>
+    <a href="/account" class="user-btn" id="user-btn" style="display:none">👤 <span id="user-name"></span></a>
+    <button class="cart-btn" id="cart-btn" onclick="cartDrawer.open()">
+      🛒 <span class="cart-count" id="cart-count">0</span>
+    </button>
+  </div>
+</header>
+
+<!-- ═══ ОСНОВНАЯ РАЗМЕТКА ════════════════════════════════════════════════ -->
+<div class="layout">
+
+  <!-- Сайдбар категорий -->
+  <aside class="sidebar">
+    <nav class="cat-nav">
+      {% if popular %}
+      <a href="#cat-popular" class="cat-item" data-slug="popular">
+        <span class="cat-icon">⭐</span> Часто заказывают
+      </a>
+      {% endif %}
+      {% for cat in categories %}
+      <a href="#cat-{{ cat.slug }}"
+         class="cat-item {% if active_category == cat.slug %}active{% endif %}"
+         data-slug="{{ cat.slug }}">
+        {% if cat.show_icon %}<span class="cat-icon">{{ cat.icon or '🍴' }}</span> {% endif %}{{ cat.name }}
+      </a>
+      {% endfor %}
+    </nav>
+  </aside>
+
+  <!-- Контент -->
+  <main class="content" id="catalog-content">
+
+    <!-- ═══ СТОРИС внутри контента ══════════════════════════════════════ -->
+    {% if stories %}
+    <div class="stories-row" id="stories-row">
+      {% for s in stories %}
+      <div class="story-thumb" onclick="storyViewer.open({{ loop.index0 }})">
+        <div class="story-ring" id="story-ring-{{ loop.index0 }}">
+          <div class="story-ring-inner">
+            <img src="/media/{{ s.cover_image }}" alt="{{ s.title }}" loading="lazy">
+          </div>
+        </div>
+        <span class="story-label">{{ s.title }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Поиск — пустое состояние -->
+    <div id="search-empty" class="search-empty hidden">
+      <div class="empty-icon">🔍</div>
+      <p>Ничего не найдено</p>
+    </div>
+
+    <!-- Секция «Часто заказывают» -->
+    {% if popular %}
+    <section class="product-section cat-section" id="cat-popular" data-slug="popular">
+      <h2 class="section-title">⭐ Часто заказывают</h2>
+      <div class="product-grid">
+        {% for p in popular %}{% include "partials/product_card.html" %}{% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Секции по категориям (весь каталог) -->
+    {% for g in category_groups %}
+    <section class="product-section cat-section" id="cat-{{ g.category.slug }}" data-slug="{{ g.category.slug }}">
+      <h2 class="section-title">{% if g.category.show_icon %}{{ g.category.icon or '🍴' }} {% endif %}{{ g.category.name }}</h2>
+      <div class="product-grid">
+        {% for p in g.products %}{% include "partials/product_card.html" %}{% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+
+    <!-- Пустой каталог -->
+    {% if not popular and not category_groups %}
+    <div class="catalog-empty">
+      <div class="empty-icon">🍱</div>
+      <p>Каталог пока пуст</p>
+    </div>
+    {% endif %}
+
+    <!-- Контейнер результатов поиска (скрыт, пока не ищут) -->
+    <section class="product-section" id="search-results" style="display:none">
+      <h2 class="section-title">Результаты поиска</h2>
+      <div class="product-grid" id="grid-search"></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ═══ КОРЗИНА (drawer) ═══════════════════════════════════════════════ -->
+<div class="cart-overlay" id="cart-overlay" onclick="cartDrawer.close()"></div>
+<aside class="cart-drawer" id="cart-drawer">
+  <div class="cart-header">
+    <h2>Корзина</h2>
+    <button class="cart-close" onclick="cartDrawer.close()">✕</button>
+  </div>
+  <div class="cart-body" id="cart-body">
+    <div class="cart-empty" id="cart-empty">
+      <div class="empty-icon">🛒</div>
+      <p>Соберите корзину, а мы всё быстро привезём</p>
+    </div>
+    <div id="cart-items"></div>
+  </div>
+  <div class="cart-footer" id="cart-footer" style="display:none">
+    <div class="cart-totals">
+      <div class="cart-row"><span>Товары</span><span id="cart-subtotal">0 ₽</span></div>
+      <div class="cart-row"><span>Доставка</span><span id="cart-delivery">—</span></div>
+      <div class="cart-row cart-total-row"><span>Итого</span><span id="cart-total">0 ₽</span></div>
+    </div>
+    <a href="/checkout" class="btn-primary btn-block">Оформить заказ</a>
+  </div>
+</aside>
+
+<!-- ═══ МОДАЛ ТОВАРА ════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-overlay" onclick="productModal.close()"></div>
+<div class="modal" id="product-modal">
+  <button class="modal-close" onclick="productModal.close()">✕</button>
+  <div id="modal-content"></div>
+</div>
+
+<!-- ═══ ПРОСМОТРЩИК СТОРИС ══════════════════════════════════════════════ -->
+<div class="sv-bg" id="sv-bg" style="display:none">
+  <div class="sv-wrap" id="sv-wrap">
+    <div class="sv-progress" id="sv-progress"></div>
+    <div class="sv-tap-left"  onclick="storyViewer.prev()"></div>
+    <div class="sv-tap-right" onclick="storyViewer.next()"></div>
+    <button class="sv-close" onclick="storyViewer.close()">✕</button>
+    <div id="sv-slide-container"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const INITIAL_CATEGORY = "{{ active_category or '' }}";
+  const OPEN_PRODUCT = "{{ open_product_slug or '' }}";
+  {% if open_product %}
+  const OPEN_PRODUCT_DATA = {{ open_product | tojson }};
+  {% else %}
+  const OPEN_PRODUCT_DATA = null;
+  {% endif %}
+  {% if stories %}
+  const STORIES_DATA = {{ stories_json | tojson }};
+  {% else %}
+  const STORIES_DATA = [];
+  {% endif %}
+</script>
+{% endblock %}

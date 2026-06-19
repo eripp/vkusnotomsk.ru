@@ -1,0 +1,303 @@
+{% extends "admin/base.html" %}
+{% block title %}Зоны доставки{% endblock %}
+{% block page_title %}Зоны доставки{% endblock %}
+{% set active = 'zones' %}
+
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
+<style>
+  #zone-map { height: 520px; border-radius: 8px; }
+  .zone-map-wrap { margin-bottom: 1rem; }
+  .zone-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .zone-legend-item {
+    display: flex; align-items: center; gap: 6px; padding: 4px 10px;
+    border-radius: 20px; border: 2px solid; cursor: pointer; font-size: 13px;
+    background: #fff; transition: opacity .2s;
+  }
+  .zone-legend-item.selected { font-weight: 700; }
+  .zone-legend-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+  .zone-map-hint { font-size: 12px; color: #888; margin-bottom: 6px; }
+  .zm-split { display: flex; gap: 16px; }
+  .zm-split .adm-field { flex: 1; }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" onclick="openModal()">+ Добавить зону</button>
+{% endblock %}
+
+{% block content %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+
+<!-- Карта -->
+<div class="adm-card zone-map-wrap">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <strong>Карта зон</strong>
+    <span style="font-size:12px;color:#888">Выберите зону → нарисуйте полигон → Сохранить</span>
+  </div>
+  <div class="zone-legend" id="zone-legend"></div>
+  <p class="zone-map-hint" id="map-hint">Выберите зону из списка, чтобы редактировать её полигон</p>
+  <div id="zone-map"></div>
+</div>
+
+<!-- Таблица -->
+<div class="adm-card" style="padding:0;overflow:hidden">
+  <div class="adm-table-wrap">
+    <table class="adm-table">
+      <thead><tr>
+        <th>Название</th><th>Цвет</th><th>Цена доставки</th><th>Бесплатно от</th><th>Мин. заказ</th><th>Приоритет</th><th>Статус</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for z in zones %}
+      <tr>
+        <td><strong>{{ z.name }}</strong></td>
+        <td><span style="display:inline-block;width:20px;height:20px;border-radius:4px;background:{{ z.color or '#ccc' }};vertical-align:middle"></span> {{ z.color or '—' }}</td>
+        <td>{{ z.delivery_price }} ₽</td>
+        <td>{{ z.free_delivery_from or '—' }}{% if z.free_delivery_from %} ₽{% endif %}</td>
+        <td>{{ z.min_order_sum or '—' }}{% if z.min_order_sum %} ₽{% endif %}</td>
+        <td>{{ z.priority }}</td>
+        <td><span class="badge {% if z.is_active %}badge-active{% else %}badge-inactive{% endif %}">{% if z.is_active %}Активна{% else %}Выкл{% endif %}</span></td>
+        <td>
+          <div class="btn-group">
+            <button class="btn btn-sm btn-secondary" onclick="editZone(ZONES[{{ loop.index0 }}])" title="Редактировать">✏️</button>
+            <form method="post" action="/admin/zones/{{ z.id }}/toggle" style="display:inline">
+              <button class="btn btn-sm btn-secondary" type="submit" title="Вкл/Выкл">{% if z.is_active %}⏸{% else %}▶{% endif %}</button>
+            </form>
+            <button class="btn btn-sm btn-danger" onclick="deleteZone({{ z.id }}, '{{ z.name }}')" title="Удалить">🗑</button>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" style="color:#aaa;padding:24px;text-align:center">Зон нет — добавьте первую</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script>
+const ZONES = {{ zones_json | tojson }};
+
+// ─── Карта ────────────────────────────────────────────────────────────────────
+const map = L.map('zone-map').setView([56.4977, 84.9744], 12); // Томск
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors', maxZoom: 19
+}).addTo(map);
+
+// Слои для всех зон (только просмотр)
+const zoneLayers = {};   // id -> L.Polygon
+const allZonesGroup = L.featureGroup().addTo(map);
+
+// Слой редактирования активной зоны
+let editGroup = L.featureGroup().addTo(map);
+let drawControl = null;
+let activeZoneId = null;
+
+function renderAllZones() {
+  allZonesGroup.clearLayers();
+  ZONES.forEach(z => {
+    const coords = z.polygon && z.polygon.coordinates && z.polygon.coordinates[0];
+    if (!coords || coords.length < 3) return;
+    // GeoJSON: [lng, lat] → Leaflet: [lat, lng]
+    const latlngs = coords.map(c => [c[1], c[0]]);
+    const poly = L.polygon(latlngs, {
+      color: z.color || '#3388ff',
+      fillColor: z.color || '#3388ff',
+      fillOpacity: 0.18,
+      weight: 2,
+      interactive: true,
+    });
+    poly.bindTooltip(z.name, { permanent: true, direction: 'center', className: 'zone-tooltip' });
+    poly.on('click', () => selectZone(z.id));
+    zoneLayers[z.id] = poly;
+    allZonesGroup.addLayer(poly);
+  });
+}
+
+function buildLegend() {
+  const el = document.getElementById('zone-legend');
+  el.innerHTML = '';
+  ZONES.forEach(z => {
+    const item = document.createElement('div');
+    item.className = 'zone-legend-item';
+    item.id = `legend-${z.id}`;
+    item.style.borderColor = z.color || '#3388ff';
+    item.innerHTML = `<span class="zone-legend-dot" style="background:${z.color || '#3388ff'}"></span>${z.name}`;
+    item.onclick = () => selectZone(z.id);
+    el.appendChild(item);
+  });
+}
+
+function selectZone(id) {
+  // снимаем выделение со всех
+  document.querySelectorAll('.zone-legend-item').forEach(el => el.classList.remove('selected'));
+  const legendEl = document.getElementById(`legend-${id}`);
+  if (legendEl) legendEl.classList.add('selected');
+
+  activeZoneId = id;
+  const z = ZONES.find(z => z.id === id);
+  if (!z) return;
+
+  // убираем старый drawControl
+  if (drawControl) { map.removeControl(drawControl); drawControl = null; }
+  editGroup.clearLayers();
+
+  const hint = document.getElementById('map-hint');
+  hint.textContent = `Зона: ${z.name}. Нарисуйте полигон инструментом рисования или отредактируйте существующий. Затем нажмите «Сохранить полигон».`;
+
+  // загружаем существующий полигон в редактируемый слой
+  const coords = z.polygon && z.polygon.coordinates && z.polygon.coordinates[0];
+  if (coords && coords.length >= 3) {
+    const latlngs = coords.map(c => [c[1], c[0]]);
+    const poly = L.polygon(latlngs, {
+      color: z.color || '#3388ff',
+      fillColor: z.color || '#3388ff',
+      fillOpacity: 0.3,
+      weight: 3,
+    });
+    editGroup.addLayer(poly);
+    map.fitBounds(editGroup.getBounds(), { padding: [40, 40] });
+  }
+
+  // добавляем Leaflet.draw
+  drawControl = new L.Control.Draw({
+    edit: { featureGroup: editGroup, poly: { allowIntersection: false } },
+    draw: {
+      polygon: {
+        allowIntersection: false,
+        shapeOptions: { color: z.color || '#3388ff', fillColor: z.color || '#3388ff', fillOpacity: 0.3 },
+      },
+      polyline: false, rectangle: false, circle: false,
+      circlemarker: false, marker: false,
+    },
+  });
+  map.addControl(drawControl);
+}
+
+// Когда нарисовали новый полигон — заменяем старый
+map.on(L.Draw.Event.CREATED, e => {
+  editGroup.clearLayers();
+  editGroup.addLayer(e.layer);
+});
+
+// Кнопка сохранения полигона
+async function savePolygon() {
+  if (!activeZoneId) { alert('Выберите зону на легенде'); return; }
+  const layers = editGroup.getLayers();
+  if (!layers.length) { alert('Нарисуйте полигон на карте'); return; }
+  const latlngs = layers[0].getLatLngs()[0];
+  // Leaflet: [lat, lng] → GeoJSON: [lng, lat], замыкаем
+  const coords = latlngs.map(ll => [ll.lng, ll.lat]);
+  coords.push(coords[0]);
+  const polygon = { type: 'Polygon', coordinates: [coords] };
+
+  const res = await fetch(`/admin/zones/${activeZoneId}/polygon`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ polygon }),
+  });
+  if (res.ok) {
+    // обновляем локально и перерисовываем
+    const z = ZONES.find(z => z.id === activeZoneId);
+    if (z) z.polygon = polygon;
+    renderAllZones();
+    alert('Полигон сохранён');
+  } else {
+    alert('Ошибка сохранения');
+  }
+}
+
+// ─── Модал метаданных зоны ────────────────────────────────────────────────────
+function openModal(data) {
+  document.getElementById('zone-modal').style.display = 'flex';
+  document.getElementById('zm-id').value = data ? data.id : '';
+  document.getElementById('zm-name').value = data ? data.name : '';
+  document.getElementById('zm-color').value = data ? (data.color || '#ff6b2c') : '#ff6b2c';
+  document.getElementById('zm-price').value = data ? data.delivery_price : '';
+  document.getElementById('zm-free').value = data ? (data.free_delivery_from || '') : '';
+  document.getElementById('zm-min').value = data ? (data.min_order_sum || '') : '';
+  document.getElementById('zm-priority').value = data ? data.priority : 1;
+  document.getElementById('zm-active').checked = data ? data.is_active : true;
+}
+function closeModal() { document.getElementById('zone-modal').style.display = 'none'; }
+function editZone(data) { openModal(data); }
+
+async function saveZone() {
+  const id = document.getElementById('zm-id').value;
+  const body = {
+    name:               document.getElementById('zm-name').value,
+    color:              document.getElementById('zm-color').value,
+    delivery_price:     parseInt(document.getElementById('zm-price').value) || 0,
+    free_delivery_from: parseInt(document.getElementById('zm-free').value) || null,
+    min_order_sum:      parseInt(document.getElementById('zm-min').value) || null,
+    priority:           parseInt(document.getElementById('zm-priority').value) || 1,
+    is_active:          document.getElementById('zm-active').checked,
+  };
+  const url    = id ? `/admin/zones/${id}` : '/admin/zones';
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (res.ok) location.reload();
+  else alert('Ошибка: ' + (await res.json()).detail);
+}
+
+async function deleteZone(id, name) {
+  if (!confirm(`Удалить зону «${name}»? Это действие нельзя отменить.`)) return;
+  const res = await fetch(`/admin/zones/${id}`, { method: 'DELETE' });
+  if (res.ok) location.reload();
+  else alert('Ошибка удаления');
+}
+
+// ─── Инициализация ────────────────────────────────────────────────────────────
+renderAllZones();
+buildLegend();
+
+// Кнопка "Сохранить полигон" под картой
+const mapCard = document.querySelector('.zone-map-wrap');
+const saveBtn = document.createElement('button');
+saveBtn.className = 'btn btn-primary btn-sm';
+saveBtn.style.cssText = 'margin-top:10px';
+saveBtn.textContent = 'Сохранить полигон';
+saveBtn.onclick = savePolygon;
+mapCard.appendChild(saveBtn);
+</script>
+
+<!-- Модал метаданных зоны -->
+<div id="zone-modal" class="adm-modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="adm-modal">
+    <h3>Зона доставки</h3>
+    <input type="hidden" id="zm-id">
+    <div class="adm-form">
+      <div class="zm-split">
+        <div class="adm-field"><label>Название *</label><input id="zm-name"></div>
+        <div class="adm-field"><label>Цвет</label><input id="zm-color" type="color"></div>
+      </div>
+      <div class="zm-split">
+        <div class="adm-field"><label>Цена доставки ₽</label><input id="zm-price" type="number" min="0"></div>
+        <div class="adm-field"><label>Бесплатно от ₽</label><input id="zm-free" type="number" min="0"></div>
+      </div>
+      <div class="zm-split">
+        <div class="adm-field"><label>Мин. заказ ₽</label><input id="zm-min" type="number" min="0"></div>
+        <div class="adm-field"><label>Приоритет</label><input id="zm-priority" type="number" min="0" value="1"></div>
+      </div>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer">
+        <input type="checkbox" id="zm-active" checked style="width:auto"> Активна
+      </label>
+    </div>
+    <div class="btn-group" style="margin-top:18px">
+      <button class="btn btn-primary" onclick="saveZone()">Сохранить</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.zone-tooltip { background: transparent; border: none; box-shadow: none; font-weight: 600; font-size: 12px; color: #333; }
+.btn-danger { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+.btn-danger:hover { background: #fca5a5; }
+</style>
+{% endblock %}

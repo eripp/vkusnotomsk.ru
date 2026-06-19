@@ -1,0 +1,180 @@
+{% extends "admin/base.html" %}
+{% block title %}{% if story %}Редактировать сторис{% else %}Новая сторис{% endif %}{% endblock %}
+{% block page_title %}{% if story %}{{ story.title }}{% else %}Новая сторис{% endif %}{% endblock %}
+{% set active = 'stories' %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" type="submit" form="story-form">💾 Сохранить</button>
+<a href="/admin/stories" class="btn btn-secondary btn-sm">Отмена</a>
+{% endblock %}
+
+{% block content %}
+{% if error %}<div class="adm-alert adm-alert-err">{{ error }}</div>{% endif %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start">
+<div>
+
+<!-- Основное -->
+<form method="post" enctype="multipart/form-data" id="story-form"
+      action="{% if story %}/admin/stories/{{ story.id }}/edit{% else %}/admin/stories/new{% endif %}">
+  <div class="adm-card">
+    <div class="adm-card-title">Основное</div>
+    <div class="adm-form">
+      <div class="adm-field"><label>Название *</label>
+        <input name="title" value="{{ story.title if story else '' }}" required>
+      </div>
+      <div class="adm-field-row">
+        <div class="adm-field"><label>Порядок</label>
+          <input name="sort_order" type="number" value="{{ story.sort_order if story else 0 }}">
+        </div>
+        <div class="adm-field"><label>Истекает</label>
+          <input name="expires_at" type="datetime-local"
+                 value="{{ story.expires_at.strftime('%Y-%m-%dT%H:%M') if story and story.expires_at else '' }}">
+        </div>
+      </div>
+      <div class="adm-field">
+        <label>Обложка (cover)</label>
+        <input type="file" name="cover" accept="image/*">
+      </div>
+      {% if story and story.cover_image %}
+      <div>
+        <img src="/media/{{ story.cover_image }}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #eee">
+      </div>
+      {% endif %}
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer">
+        <input type="checkbox" name="is_visible" value="1" {% if not story or story.is_visible %}checked{% endif %} style="width:auto">
+        Видима
+      </label>
+    </div>
+  </div>
+</form>
+
+{% if story %}
+<!-- Слайды -->
+<div class="adm-card" style="margin-top:20px">
+  <div class="adm-card-title">Слайды</div>
+  <div id="slides-list">
+    {% for sl in story.slides %}
+    <div class="slide-row" style="display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0">
+      <img src="/media/{{ sl.image_url }}" style="width:56px;height:80px;object-fit:cover;border-radius:6px;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;color:#888">Слайд #{{ sl.sort_order + 1 }}</div>
+        <div style="font-size:13px;margin-top:2px">{{ sl.text or '—' }}</div>
+        {% if sl.btn_label %}<div style="font-size:12px;color:#E85D24;margin-top:2px">→ {{ sl.btn_label }}</div>{% endif %}
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-sm btn-secondary" onclick="editSlide(SLIDES_DATA[{{ loop.index0 }}])">✏️</button>
+        <form method="post" action="/admin/stories/{{ story.id }}/slides/{{ sl.id }}/delete" style="display:inline">
+          <button class="btn btn-sm btn-danger" type="submit" onclick="return confirm('Удалить слайд?')">🗑</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <p style="color:#aaa;padding:12px 0">Слайдов нет — добавьте первый</p>
+    {% endfor %}
+  </div>
+  <div style="margin-top:14px">
+    <button class="btn btn-secondary" onclick="openSlideModal()">+ Добавить слайд</button>
+  </div>
+</div>
+{% endif %}
+
+</div>
+
+<!-- Правая колонка: превью -->
+{% if story %}
+<div>
+  <div class="adm-card">
+    <div class="adm-card-title" style="margin-bottom:10px">Превью обложки</div>
+    <div style="width:80px;height:80px;border-radius:50%;padding:3px;background:linear-gradient(135deg,#E85D24,#ffd04b);margin:0 auto">
+      <div style="width:100%;height:100%;border-radius:50%;overflow:hidden;border:3px solid #fff">
+        {% if story.cover_image %}
+        <img src="/media/{{ story.cover_image }}" style="width:100%;height:100%;object-fit:cover">
+        {% else %}
+        <div style="width:100%;height:100%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:24px">📸</div>
+        {% endif %}
+      </div>
+    </div>
+    <p style="text-align:center;font-size:12px;color:#888;margin-top:8px">{{ story.title }}</p>
+  </div>
+</div>
+{% endif %}
+
+</div>
+
+<!-- Модал слайда -->
+{% if story %}
+<div id="slide-modal" class="adm-modal-bg" style="display:none" onclick="if(event.target===this)closeSlideModal()">
+  <div class="adm-modal">
+    <h3 id="slide-modal-title">Новый слайд</h3>
+    <input type="hidden" id="sl-id">
+    <form method="post" enctype="multipart/form-data" id="slide-form"
+          action="/admin/stories/{{ story.id }}/slides">
+      <input type="hidden" name="slide_id" id="sl-form-id">
+      <div class="adm-form">
+        <div class="adm-field">
+          <label>Изображение *</label>
+          <input type="file" name="image" accept="image/*" id="sl-image-file" required>
+          <div id="sl-current-img" style="margin-top:6px"></div>
+        </div>
+        <div class="adm-field"><label>Текст на слайде</label>
+          <textarea name="text" id="sl-text" rows="3"></textarea>
+        </div>
+        <div class="adm-field-row">
+          <div class="adm-field"><label>Цвет текста</label>
+            <input type="color" name="text_color" id="sl-color" value="#ffffff">
+          </div>
+          <div class="adm-field"><label>Порядок</label>
+            <input type="number" name="sort_order" id="sl-order" value="0" min="0">
+          </div>
+        </div>
+        <div class="adm-field"><label>Кнопка (текст)</label>
+          <input name="btn_label" id="sl-btn-label" placeholder="Перейти в каталог">
+        </div>
+        <div class="adm-field"><label>Кнопка (ссылка)</label>
+          <input name="btn_url" id="sl-btn-url" placeholder="/category/salaty">
+        </div>
+      </div>
+      <div class="btn-group" style="margin-top:18px">
+        <button class="btn btn-primary" type="submit">Сохранить</button>
+        <button class="btn btn-secondary" type="button" onclick="closeSlideModal()">Отмена</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if story %}
+<script>
+const SLIDES_DATA = {{ slides_json | tojson }};
+
+function openSlideModal(data) {
+  document.getElementById('slide-modal').style.display = 'flex';
+  document.getElementById('slide-modal-title').textContent = data ? 'Редактировать слайд' : 'Новый слайд';
+  document.getElementById('sl-form-id').value = data ? data.id : '';
+  document.getElementById('sl-text').value    = data ? (data.text || '') : '';
+  document.getElementById('sl-color').value   = data ? (data.text_color || '#ffffff') : '#ffffff';
+  document.getElementById('sl-order').value   = data ? data.sort_order : 0;
+  document.getElementById('sl-btn-label').value = data ? (data.btn_label || '') : '';
+  document.getElementById('sl-btn-url').value   = data ? (data.btn_url   || '') : '';
+  const cur = document.getElementById('sl-current-img');
+  const fileInput = document.getElementById('sl-image-file');
+  fileInput.value = '';
+  if (data && data.image_url) {
+    // редактирование: изображение можно не менять — оставить текущее
+    cur.innerHTML = `<img src="/media/${data.image_url}" style="width:60px;height:80px;object-fit:cover;border-radius:4px">`;
+    fileInput.required = false;
+  } else {
+    // новый слайд: изображение обязательно
+    cur.innerHTML = '';
+    fileInput.required = true;
+  }
+}
+function closeSlideModal() { document.getElementById('slide-modal').style.display = 'none'; }
+function editSlide(data) { openSlideModal(data); }
+</script>
+{% endif %}
+{% endblock %}

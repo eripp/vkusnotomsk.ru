@@ -1,0 +1,58 @@
+{% extends "admin/base.html" %}
+{% block title %}Заказы{% endblock %}
+{% block page_title %}Заказы{% endblock %}
+{% set active = 'orders' %}
+
+{% block topbar_actions %}
+<form method="get" class="adm-filters" style="margin:0">
+  <input name="q" value="{{ q }}" placeholder="Телефон или #номер" style="width:200px">
+  <select name="status">
+    <option value="">Все статусы</option>
+    {% for s in statuses %}
+    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ STATUS_LABELS[s] }}</option>
+    {% endfor %}
+  </select>
+  <input name="date" type="date" value="{{ date_filter }}">
+  <button class="btn btn-secondary btn-sm" type="submit">Найти</button>
+  {% if q or status_filter or date_filter %}
+  <a href="/admin/orders" class="btn btn-sm btn-secondary">✕ Сброс</a>
+  {% endif %}
+</form>
+{% endblock %}
+
+{% block content %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+<div class="adm-card" style="padding:0;overflow:hidden">
+  <div class="adm-table-wrap">
+    <table class="adm-table">
+      <thead><tr>
+        <th>#</th><th>Телефон</th><th>Адрес</th><th>Доставка</th>
+        <th>Сумма</th><th>Оплата</th><th>Статус</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for o in orders %}
+      <tr>
+        <td><a href="/admin/orders/{{ o.id }}" style="font-weight:600">#{{ o.id }}</a></td>
+        <td>{{ o.phone }}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ o.address }}">{{ o.address }}</td>
+        <td style="white-space:nowrap">{{ o.delivery_date }}<br><small style="color:#888">{{ o.slot_start.strftime('%H:%M') }}–{{ o.slot_end.strftime('%H:%M') }}</small></td>
+        <td style="white-space:nowrap">{{ o.total_amount }} ₽</td>
+        <td><span class="badge badge-{{ o.payment_status.value }}">{{ PAY_STATUS[o.payment_status.value] }}</span></td>
+        <td><span class="badge badge-{{ o.status.value }}">{{ STATUS_LABELS[o.status.value] }}</span></td>
+        <td><a href="/admin/orders/{{ o.id }}" class="btn btn-sm btn-secondary">→</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" style="color:#aaa;padding:24px;text-align:center">Заказы не найдены</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="adm-pagination">
+  {% if page > 1 %}<a href="?page={{ page-1 }}&q={{ q }}&status={{ status_filter }}&date={{ date_filter }}">‹ Пред</a>{% endif %}
+  <span class="cur">{{ page }}</span>
+  {% if has_next %}<a href="?page={{ page+1 }}&q={{ q }}&status={{ status_filter }}&date={{ date_filter }}">След ›</a>{% endif %}
+  <span style="color:#aaa;font-size:12px;margin-left:8px">Всего: {{ total }}</span>
+</div>
+{% endblock %}

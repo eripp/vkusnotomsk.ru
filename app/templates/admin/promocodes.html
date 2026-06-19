@@ -1,0 +1,131 @@
+{% extends "admin/base.html" %}
+{% block title %}Промокоды{% endblock %}
+{% block page_title %}Промокоды{% endblock %}
+{% set active = 'promocodes' %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" onclick="openModal()">+ Создать</button>
+{% endblock %}
+
+{% block content %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+<div class="adm-card" style="padding:0;overflow:hidden">
+  <div class="adm-table-wrap">
+    <table class="adm-table">
+      <thead><tr>
+        <th>Код</th><th>Тип</th><th>Скидка</th><th>Кешбэк</th>
+        <th>Мин. сумма</th><th>Использований</th><th>Действует до</th><th>Статус</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for p in promos %}
+      <tr>
+        <td><code style="font-size:13px;background:#f5f5f5;padding:2px 6px;border-radius:4px">{{ p.code }}</code></td>
+        <td>{{ TYPE_LABELS[p.type.value] }}</td>
+        <td>{% if p.discount_percent %}{{ p.discount_percent }}%{% else %}—{% endif %}</td>
+        <td>{% if p.cashback_buyer_pct %}{{ p.cashback_buyer_pct }}%{% else %}—{% endif %}</td>
+        <td>{{ p.min_order_amount or '—' }} {% if p.min_order_amount %}₽{% endif %}</td>
+        <td>{{ p.usage_count }} / {{ p.usage_limit or '∞' }}</td>
+        <td style="color:#888;font-size:12px">{{ p.valid_until.strftime('%d.%m.%Y') if p.valid_until else '—' }}</td>
+        <td><span class="badge {% if p.is_active %}badge-active{% else %}badge-inactive{% endif %}">{% if p.is_active %}Активен{% else %}Выкл{% endif %}</span></td>
+        <td>
+          <div class="btn-group">
+            <button class="btn btn-sm btn-secondary" onclick="editPromo(PROMOS[{{ loop.index0 }}])">✏️</button>
+            <form method="post" action="/admin/promocodes/{{ p.id }}/toggle" style="display:inline">
+              <button class="btn btn-sm btn-secondary" type="submit">{% if p.is_active %}⏸{% else %}▶{% endif %}</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" style="color:#aaa;padding:24px;text-align:center">Промокодов нет</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PROMOS = {{ promos_json | tojson }};
+function openModal(data) {
+  const isEdit = !!data;
+  const m = document.getElementById('promo-modal');
+  m.style.display = 'flex';
+  document.getElementById('pm-title').textContent = isEdit ? 'Редактировать промокод' : 'Новый промокод';
+  document.getElementById('pm-id').value = data ? data.id : '';
+  document.getElementById('pm-code').value = data ? data.code : '';
+  document.getElementById('pm-type').value = data ? data.type : 'discount';
+  document.getElementById('pm-discount').value = data ? (data.discount_percent || '') : '';
+  document.getElementById('pm-cashback').value = data ? (data.cashback_buyer_pct || '') : '';
+  document.getElementById('pm-min').value = data ? (data.min_order_amount || '') : '';
+  document.getElementById('pm-limit').value = data ? (data.usage_limit || '') : '';
+  document.getElementById('pm-from').value = data ? (data.valid_from ? data.valid_from.slice(0,10) : '') : '';
+  document.getElementById('pm-until').value = data ? (data.valid_until ? data.valid_until.slice(0,10) : '') : '';
+  document.getElementById('pm-active').checked = data ? data.is_active : true;
+}
+function closeModal() { document.getElementById('promo-modal').style.display = 'none'; }
+function editPromo(data) { openModal(data); }
+
+async function savePromo() {
+  const id = document.getElementById('pm-id').value;
+  const body = {
+    code:               document.getElementById('pm-code').value,
+    type:               document.getElementById('pm-type').value,
+    discount_percent:   parseInt(document.getElementById('pm-discount').value) || null,
+    cashback_buyer_pct: parseInt(document.getElementById('pm-cashback').value) || null,
+    min_order_amount:   parseInt(document.getElementById('pm-min').value) || null,
+    usage_limit:        parseInt(document.getElementById('pm-limit').value) || null,
+    valid_from:         document.getElementById('pm-from').value || null,
+    valid_until:        document.getElementById('pm-until').value || null,
+    is_active:          document.getElementById('pm-active').checked,
+  };
+  const url    = id ? `/admin/promocodes/${id}` : '/admin/promocodes';
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (res.ok) location.reload();
+  else alert('Ошибка: ' + (await res.json()).detail);
+}
+</script>
+
+<!-- Модал -->
+<div id="promo-modal" class="adm-modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="adm-modal">
+    <h3 id="pm-title">Новый промокод</h3>
+    <input type="hidden" id="pm-id">
+    <div class="adm-form">
+      <div class="adm-field"><label>Код *</label><input id="pm-code" style="text-transform:uppercase"></div>
+      <div class="adm-field-row">
+        <div class="adm-field">
+          <label>Тип</label>
+          <select id="pm-type">
+            <option value="discount">Скидка</option>
+            <option value="cashback">Кешбэк</option>
+            <option value="referral">Реферальный</option>
+          </select>
+        </div>
+        <div class="adm-field"><label>Скидка %</label><input id="pm-discount" type="number" min="1" max="100"></div>
+      </div>
+      <div class="adm-field-row">
+        <div class="adm-field"><label>Кешбэк покупателю %</label><input id="pm-cashback" type="number" min="1" max="100"></div>
+        <div class="adm-field"><label>Мин. сумма ₽</label><input id="pm-min" type="number" min="0"></div>
+      </div>
+      <div class="adm-field-row">
+        <div class="adm-field"><label>Лимит использований</label><input id="pm-limit" type="number" min="1" placeholder="∞"></div>
+        <div class="adm-field">
+          <label>Активен</label>
+          <input type="checkbox" id="pm-active" checked style="width:auto;margin-top:8px">
+        </div>
+      </div>
+      <div class="adm-field-row">
+        <div class="adm-field"><label>Начало</label><input id="pm-from" type="date"></div>
+        <div class="adm-field"><label>Конец</label><input id="pm-until" type="date"></div>
+      </div>
+    </div>
+    <div class="btn-group" style="margin-top:18px">
+      <button class="btn btn-primary" onclick="savePromo()">Сохранить</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

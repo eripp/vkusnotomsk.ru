@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Заказ #{{ order.id }} принят · Вкусно{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+
+{% block body %}
+<header class="header">
+  <div class="header-inner">
+    <a href="/" class="logo"><img src="/static/img/logo.svg" alt="Вкусно — доставка еды по Томску"></a>
+  </div>
+</header>
+
+<div class="order-success">
+  <div class="os-icon">✅</div>
+  <h1 class="os-title">Заказ принят!</h1>
+  <p class="os-subtitle">Номер заказа: <strong>#{{ order.id }}</strong></p>
+
+  <div class="os-details">
+    <div class="os-row"><span>Адрес</span><span>{{ order.address }}</span></div>
+    <div class="os-row"><span>Дата</span><span>{{ order.delivery_date }}</span></div>
+    <div class="os-row"><span>Время</span><span>{{ order.slot_start | string | truncate(5, killwords=True, end='') }} – {{ order.slot_end | string | truncate(5, killwords=True, end='') }}</span></div>
+    <div class="os-row"><span>Оплата</span><span>{{ {"online": "Онлайн", "terminal": "Картой курьеру", "cash": "Наличными"}.get(order.payment_method.value, order.payment_method.value) }}</span></div>
+    <div class="os-row os-row-total"><span>Итого</span><span>{{ order.total_amount }} ₽</span></div>
+  </div>
+
+  <div class="os-items">
+    {% for item in items %}
+    <div class="os-item">
+      <span>{{ item.product_name }}</span>
+      <span>× {{ item.quantity }}</span>
+      <span>{{ item.line_total }} ₽</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <p class="os-hint">Мы позвоним на <strong>{{ order.phone }}</strong> для подтверждения</p>
+
+  <a href="/" class="btn-primary" style="display:inline-block;margin-top:24px">Вернуться в меню</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.dataLayer = window.dataLayer || [];
+window.dataLayer.push({
+  ecommerce: {
+    purchase: {
+      actionField: {
+        id: "{{ order.id }}",
+        revenue: "{{ order.total_amount }}"
+      },
+      products: [
+        {% for item in items %}
+        { id: {{ item.product_id }}, name: {{ item.product_name | tojson }}, price: "{{ item.product_price }}", quantity: {{ item.quantity }} }{% if not loop.last %},{% endif %}
+        {% endfor %}
+      ]
+    }
+  }
+});
+// Очищаем корзину после успешного заказа
+localStorage.removeItem('vkusno_cart');
+</script>
+{% endblock %}
