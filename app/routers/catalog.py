@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates  # noqa: F401
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from app.database import get_db
 from app.models import Category, Product, ProductGroup, ProductImage
 from app.routers.stories import get_active_stories
@@ -80,15 +80,47 @@ async def _get_products(
             if img.product_id not in images_map:
                 images_map[img.product_id] = img.url
 
-    # схлопываем группы
-    seen_groups: set[int] = set()
+    # карта групп → default_product_id (какой вариант показывать в каталоге)
+    group_ids = {p.group_id for p in products if p.group_id is not None}
+    default_map: dict[int, int] = {}
+    group_counts: dict[int, int] = {}
+    if group_ids:
+        grows = await db.execute(
+            select(ProductGroup.id, ProductGroup.default_product_id)
+            .where(ProductGroup.id.in_(group_ids))
+        )
+        default_map = {gid: did for gid, did in grows.all() if did is not None}
+        # полное число вариантов в группе (видимых, не удалённых) — для пометки
+        # «ещё N вариантов»; считаем по всей группе, не по отфильтрованной выборке
+        crows = await db.execute(
+            select(Product.group_id, func.count(Product.id))
+            .where(
+                Product.group_id.in_(group_ids),
+                Product.is_visible == True,
+                Product.is_deleted == False,
+            )
+            .group_by(Product.group_id)
+        )
+        group_counts = {gid: cnt for gid, cnt in crows.all()}
+
+    # Представитель группы: default_product_id, если он есть в выборке,
+    # иначе первый по сортировке. Товары без группы — все.
+    by_id = {p.id: p for p in products}
+    group_repr: dict[int, int] = {}   # group_id → product_id-представитель
+    for p in products:
+        if p.group_id is None:
+            continue
+        if p.group_id not in group_repr:
+            default_id = default_map.get(p.group_id)
+            group_repr[p.group_id] = default_id if default_id in by_id else p.id
+
     output = []
     for p in products:
-        if p.group_id is not None:
-            if p.group_id in seen_groups:
-                continue
-            seen_groups.add(p.group_id)
-        output.append(_product_to_dict(p, images_map.get(p.id)))
+        if p.group_id is not None and group_repr.get(p.group_id) != p.id:
+            continue
+        d = _product_to_dict(p, images_map.get(p.id))
+        d["variants_count"] = group_counts.get(p.group_id, 0) if p.group_id else 0
+        output.append(d)
     return output
 
 

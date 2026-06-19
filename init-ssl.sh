@@ -1,16 +1,24 @@
 #!/bin/bash
 # Первичное получение SSL-сертификата Let's Encrypt.
-# Запускать один раз на сервере ПОСЛЕ того как DNS домена указывает на сервер
+# Запускать на сервере ПОСЛЕ того как DNS домена указывает на сервер
 # и nginx уже запущен (docker compose up -d nginx).
 #
-# Usage: bash init-ssl.sh your@email.com vkusnotomsk.ru
+# Usage:
+#   bash init-ssl.sh your@email.com vkusnotomsk.ru             # домен + www
+#   bash init-ssl.sh your@email.com v2.vkusnotomsk.ru --no-www # только сам домен
 
 set -euo pipefail
 
-EMAIL="${1:?Usage: $0 <email> <domain>}"
-DOMAIN="${2:?Usage: $0 <email> <domain>}"
+EMAIL="${1:?Usage: $0 <email> <domain> [--no-www]}"
+DOMAIN="${2:?Usage: $0 <email> <domain> [--no-www]}"
+NOWWW="${3:-}"
 
-echo "==> Получаем сертификат для ${DOMAIN} ..."
+DOMAIN_ARGS=(-d "${DOMAIN}")
+if [ "${NOWWW}" != "--no-www" ]; then
+  DOMAIN_ARGS+=(-d "www.${DOMAIN}")
+fi
+
+echo "==> Получаем сертификат для ${DOMAIN} (${DOMAIN_ARGS[*]}) ..."
 docker compose run --rm \
   certbot certonly \
     --webroot \
@@ -18,11 +26,11 @@ docker compose run --rm \
     --email "${EMAIL}" \
     --agree-tos \
     --no-eff-email \
-    -d "${DOMAIN}" \
-    -d "www.${DOMAIN}"
+    "${DOMAIN_ARGS[@]}"
 
 echo "==> Перезагружаем nginx ..."
 docker compose exec nginx nginx -s reload
 
-echo "==> Готово! Теперь добавьте в crontab авторенью:"
+echo "==> Готово! Сертификат для ${DOMAIN} выпущен."
+echo "    Авторенью (один раз в crontab, общий для всех доменов):"
 echo "    0 3 * * * cd $(pwd) && docker compose run --rm certbot renew --quiet && docker compose exec nginx nginx -s reload"

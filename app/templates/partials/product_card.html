@@ -17,6 +17,9 @@
   </div>
   <div class="product-info">
     <div class="product-name">{{ p.name }}</div>
+    {% if p.variants_count and p.variants_count > 1 %}
+    <div class="product-variants-hint">ещё {{ p.variants_count - 1 }} {{ (p.variants_count - 1) | variants_word }}</div>
+    {% endif %}
     {% if p.weight %}<div class="product-weight">{{ p.weight }}</div>{% endif %}
     {% if p.kcal or p.protein or p.fat or p.carbs %}
     <div class="product-nutrition">

@@ -87,7 +87,16 @@ async def send_otp(payload: SendOtpIn, db: AsyncSession = Depends(get_db)):
     # отправляем код (заглушка если ключей нет)
     await send_otp_code(phone=phone, code=code, channel=channel)
 
-    return {"status": "sent", "expires_in": OTP_TTL_SECONDS}
+    resp = {"status": "sent", "expires_in": OTP_TTL_SECONDS}
+
+    # Dev-режим: если каналы доставки (Telegram/MAX) не настроены, кода всё равно
+    # никуда не уйдёт — возвращаем его в ответе, чтобы вход работал на
+    # тест/временном домене. На проде с настроенными ключами это отключается.
+    from app.config import settings as _s
+    if not _s.TG_BOT_TOKEN and not _s.MAX_API_KEY:
+        resp["dev_code"] = code
+
+    return resp
 
 
 @router.post("/verify-otp")

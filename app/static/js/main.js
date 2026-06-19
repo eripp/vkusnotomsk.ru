@@ -125,6 +125,7 @@ function cardHTML(p) {
     </div>
     <div class="product-info">
       <div class="product-name">${esc(p.name)}</div>
+      ${p.variants_count > 1 ? `<div class="product-variants-hint">ещё ${p.variants_count - 1} ${variantsWord(p.variants_count - 1)}</div>` : ''}
       ${p.weight ? `<div class="product-weight">${esc(p.weight)}</div>` : ''}
       ${(p.kcal || p.protein || p.fat || p.carbs) ? `<div class="product-nutrition">
         ${p.kcal ? `<span class="pn-kcal">${p.kcal} ккал</span>` : ''}
@@ -393,17 +394,32 @@ window.addEventListener('popstate', () => {
   if (modal && modal.classList.contains('open')) _closeModal();
 });
 
-// ─── Авторизация: показываем имя пользователя в шапке ────────────────────────
+// ─── Горизонтальный скролл «Что ещё пригодится» колесом мыши ─────────────────
+document.addEventListener('wheel', (e) => {
+  const strip = e.target.closest && e.target.closest('.pm-recs-scroll');
+  if (!strip) return;
+  // вертикальный жест колеса → горизонтальная прокрутка ленты
+  const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+  if (!delta) return;
+  // прокручиваем, пока есть куда (иначе не блокируем обычный скролл страницы)
+  const atStart = strip.scrollLeft <= 0;
+  const atEnd = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1;
+  if ((delta < 0 && atStart) || (delta > 0 && atEnd)) return;
+  strip.scrollLeft += delta;
+  e.preventDefault();
+}, { passive: false });
+
+// ─── Авторизация: если вошли — показываем имя в кнопке «Личный кабинет» ──────
 (async () => {
   try {
     const res = await fetch('/api/auth/me');
     if (res.ok) {
       const user = await res.json();
       localStorage.setItem('vkusno_user', JSON.stringify(user));
-      const btn = document.getElementById('user-btn');
-      const nm  = document.getElementById('user-name');
-      if (btn) btn.style.display = '';
-      if (nm)  nm.textContent = user.name || user.phone;
+      const lbl = document.getElementById('account-btn-label');
+      if (lbl) lbl.textContent = user.name || user.phone;
+    } else {
+      localStorage.removeItem('vkusno_user');
     }
   } catch { /* не критично */ }
 })();
@@ -413,6 +429,14 @@ function esc(s) {
   return String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// «1 вариант / 2 варианта / 5 вариантов»
+function variantsWord(n) {
+  n = Math.abs(n);
+  if (n % 10 === 1 && n % 100 !== 11) return 'вариант';
+  if (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14)) return 'варианта';
+  return 'вариантов';
 }
 
 // Текстовое поле к показу: null/none/null-строки → пусто (защита от мусорных данных)

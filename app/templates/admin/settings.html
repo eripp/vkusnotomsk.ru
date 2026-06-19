@@ -30,6 +30,18 @@
           <span style="color:#aaa;font-size:12px">по умолчанию #E85D24</span>
         </div>
       </div>
+      <div class="adm-field">
+        <label>Цвет при наведении <span style="color:#aaa;font-weight:400">— hover кнопок (brand_hover)</span></label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="color" id="brand-hover-picker"
+                 value="{{ val('brand_hover') or '#d44f1a' }}"
+                 style="width:48px;height:38px;padding:2px;cursor:pointer">
+          <input type="text" name="brand_hover" id="brand-hover-text"
+                 value="{{ val('brand_hover') or '#d44f1a' }}"
+                 placeholder="#d44f1a" style="max-width:140px;font-family:monospace">
+          <span style="color:#aaa;font-size:12px">по умолчанию #d44f1a</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -113,15 +125,17 @@
 </form>
 
 <script>
-// Синхронизация color-picker и текстового поля фирменного цвета
-(() => {
-  const picker = document.getElementById('brand-color-picker');
-  const text   = document.getElementById('brand-color-text');
+// Синхронизация color-picker и текстового поля цвета
+function syncColorPair(pickerId, textId) {
+  const picker = document.getElementById(pickerId);
+  const text   = document.getElementById(textId);
   if (!picker || !text) return;
   picker.addEventListener('input', () => { text.value = picker.value; });
   text.addEventListener('input', () => {
     if (/^#[0-9a-fA-F]{6}$/.test(text.value.trim())) picker.value = text.value.trim();
   });
-})();
+}
+syncColorPair('brand-color-picker', 'brand-color-text');
+syncColorPair('brand-hover-picker', 'brand-hover-text');
 </script>
 {% endblock %}

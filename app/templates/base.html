@@ -71,15 +71,133 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="/static/css/main.css">
-  {% if request.state.site_settings.get('brand_color') %}
-  <style>:root { --brand: {{ request.state.site_settings['brand_color'] }}; }</style>
+  {% if request.state.site_settings.get('brand_color') or request.state.site_settings.get('brand_hover') %}
+  <style>:root {
+    {% if request.state.site_settings.get('brand_color') %}--brand: {{ request.state.site_settings['brand_color'] }};{% endif %}
+    {% if request.state.site_settings.get('brand_hover') %}--brand-hover: {{ request.state.site_settings['brand_hover'] }};{% endif %}
+  }</style>
   {% endif %}
   {% block head %}{% endblock %}
 </head>
 <body>
 {% block body %}{% endblock %}
+
+<!-- ═══ МОДАЛ АВТОРИЗАЦИИ (OTP) ════════════════════════════════════════════ -->
+<div class="auth-overlay" id="auth-overlay" onclick="auth.close()"></div>
+<div class="auth-modal" id="auth-modal" role="dialog" aria-modal="true">
+  <button class="auth-close" onclick="auth.close()" aria-label="Закрыть">✕</button>
+  <h2 class="auth-title">Вход в личный кабинет</h2>
+
+  <!-- Шаг 1: телефон -->
+  <div id="auth-step-phone">
+    <p class="auth-hint">Введите номер телефона — пришлём код подтверждения</p>
+    <input id="auth-phone" class="auth-input" type="tel" inputmode="tel"
+           placeholder="+7 (___) ___-__-__" autocomplete="tel">
+    <button class="btn-primary btn-block" onclick="auth.sendCode()">Получить код</button>
+  </div>
+
+  <!-- Шаг 2: код -->
+  <div id="auth-step-code" style="display:none">
+    <p class="auth-hint">Код отправлен на <b id="auth-phone-label"></b>.
+      <a href="#" onclick="auth.back();return false" class="auth-link">Изменить</a></p>
+    <div id="auth-dev-code" class="auth-dev" style="display:none"></div>
+    <input id="auth-code" class="auth-input" type="text" inputmode="numeric"
+           maxlength="4" placeholder="0000" autocomplete="one-time-code">
+    <button class="btn-primary btn-block" onclick="auth.verify()">Войти</button>
+    <button class="auth-link auth-resend" onclick="auth.sendCode()">Отправить код повторно</button>
+  </div>
+
+  <div id="auth-error" class="auth-error" style="display:none"></div>
+</div>
+
 <script src="/static/js/cart.js"></script>
 <script src="/static/js/main.js"></script>
+<script>
+// ─── Авторизация по OTP (общая модалка) ──────────────────────────────────────
+const auth = {
+  open() {
+    document.getElementById('auth-overlay').classList.add('open');
+    document.getElementById('auth-modal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    this.back();
+    setTimeout(() => document.getElementById('auth-phone').focus(), 50);
+  },
+  close() {
+    document.getElementById('auth-overlay').classList.remove('open');
+    document.getElementById('auth-modal').classList.remove('open');
+    document.body.style.overflow = '';
+    this._err('');
+  },
+  back() {
+    document.getElementById('auth-step-phone').style.display = '';
+    document.getElementById('auth-step-code').style.display = 'none';
+    document.getElementById('auth-dev-code').style.display = 'none';
+    this._err('');
+  },
+  _err(msg) {
+    const el = document.getElementById('auth-error');
+    el.textContent = msg; el.style.display = msg ? '' : 'none';
+  },
+  _phone() { return document.getElementById('auth-phone').value.trim(); },
+
+  async sendCode() {
+    const phone = this._phone();
+    if (phone.replace(/\D/g, '').length < 10) { this._err('Введите корректный номер телефона'); return; }
+    this._err('');
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, channel: 'tg' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Ошибка отправки кода');
+      // переходим к вводу кода
+      document.getElementById('auth-step-phone').style.display = 'none';
+      document.getElementById('auth-step-code').style.display = '';
+      document.getElementById('auth-phone-label').textContent = phone;
+      const dev = document.getElementById('auth-dev-code');
+      if (data.dev_code) {
+        dev.style.display = '';
+        dev.innerHTML = `Тестовый режим — ваш код: <b>${data.dev_code}</b>`;
+      } else {
+        dev.style.display = 'none';
+      }
+      setTimeout(() => document.getElementById('auth-code').focus(), 50);
+    } catch (e) { this._err(e.message); }
+  },
+
+  async verify() {
+    const phone = this._phone();
+    const code = document.getElementById('auth-code').value.trim();
+    if (!code) { this._err('Введите код'); return; }
+    this._err('');
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Неверный код');
+      // успех — обновляем шапку и уходим в кабинет
+      window.location.href = '/account';
+    } catch (e) { this._err(e.message); }
+  },
+};
+
+// Кнопка «Личный кабинет»: если уже вошли — в кабинет, иначе — модалка входа
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('account-btn');
+  if (!btn) return;
+  btn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/auth/me');
+      if (res.ok) { window.location.href = '/account'; return; }
+    } catch {}
+    auth.open();
+  });
+});
+</script>
 {% block scripts %}{% endblock %}
 
 {% set _mid = request.state.site_settings.get('metrika_id', '') %}

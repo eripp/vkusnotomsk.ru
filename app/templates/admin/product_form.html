@@ -97,18 +97,51 @@
     {% endif %}
   </div>
 
+  <!-- Варианты / группа -->
   <div class="adm-card">
-    <div class="adm-card-title">Параметры</div>
+    <div class="adm-card-title">Варианты (группа)</div>
+    <p style="color:#888;font-size:12px;margin:-8px 0 12px">
+      Объедините похожие товары в группу (напр. «Шашлык» → гарнир: пюре / макароны / картофель).
+      В каталоге группа показывается одной карточкой, внутри — выбор варианта.
+    </p>
     <div class="adm-form">
       <div class="adm-field-row">
         <div class="adm-field">
-          <label>Порядок сортировки</label>
-          <input name="sort_order" type="number" value="{{ product.sort_order if product else 0 }}">
+          <label>Группа</label>
+          <select name="group_id" id="group-select" onchange="document.getElementById('group-new-wrap').style.display = this.value==='__new__' ? '' : 'none'">
+            <option value="">— без группы (обычный товар) —</option>
+            {% for g in groups %}
+            <option value="{{ g.id }}" {% if product and product.group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
+            {% endfor %}
+            <option value="__new__">+ создать новую группу…</option>
+          </select>
         </div>
+        <div class="adm-field" id="group-new-wrap" style="display:none">
+          <label>Название новой группы</label>
+          <input name="group_new" placeholder="напр. Шашлык куриный во фритюре">
+        </div>
+      </div>
+      <div class="adm-field-row">
         <div class="adm-field">
-          <label>Группа (ID)</label>
-          <input name="group_id" type="number" value="{{ product.group_id if product else '' }}" placeholder="для вариантов">
+          <label>Метка варианта <span style="color:#aaa;font-weight:400">— что выбирают на пилюле</span></label>
+          <input name="variant_label" value="{{ product.variant_label or '' if product else '' }}" placeholder="напр. С пюре">
         </div>
+        <div class="adm-field" style="display:flex;align-items:flex-end;padding-bottom:8px">
+          <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin:0">
+            <input type="checkbox" name="is_default" value="1" {% if is_default %}checked{% endif %} style="width:auto">
+            Вариант по умолчанию (показывать в каталоге)
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="adm-card">
+    <div class="adm-card-title">Параметры</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Порядок сортировки</label>
+        <input name="sort_order" type="number" value="{{ product.sort_order if product else 0 }}">
       </div>
       <div style="display:flex;gap:16px;flex-wrap:wrap">
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer">

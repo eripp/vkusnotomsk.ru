@@ -20,7 +20,7 @@ from app.database import get_db
 from app.models import (
     AdminUser, Category, CashbackAccount, CashbackTransaction, CashbackTxType,
     DeliveryZone, Order, OrderItem,
-    OrderStatus, PaymentMethod, PaymentStatus, Product, ProductImage,
+    OrderStatus, PaymentMethod, PaymentStatus, Product, ProductGroup, ProductImage,
     Promocode, PromoType, ScheduleEntry, ScheduleEntryType, SiteSetting, Story, StorySlide, User,
 )
 from app.services.notifications import notify_order_status
@@ -307,11 +307,57 @@ async def admin_products(
     })
 
 
+async def _resolve_group(db: AsyncSession, group_id: str, group_new: str) -> Optional[int]:
+    """Определяет group_id для товара по данным формы.
+      group_new — название новой группы (если задано, создаём ProductGroup);
+      group_id  — id существующей группы ('' или '0' → без группы)."""
+    group_new = (group_new or "").strip()
+    if group_new:
+        slug_base = _slugify_ru(group_new)
+        # переиспользуем существующую группу с таким slug_base, иначе создаём
+        g = (await db.execute(
+            select(ProductGroup).where(ProductGroup.slug_base == slug_base)
+        )).scalar_one_or_none()
+        if not g:
+            g = ProductGroup(name=group_new, slug_base=slug_base)
+            db.add(g)
+            await db.flush()
+        return g.id
+    if group_id and group_id not in ("0", ""):
+        return int(group_id)
+    return None
+
+
+def _slugify_ru(text: str) -> str:
+    import re, unicodedata
+    table = {
+        "а":"a","б":"b","в":"v","г":"g","д":"d","е":"e","ё":"e","ж":"zh","з":"z",
+        "и":"i","й":"y","к":"k","л":"l","м":"m","н":"n","о":"o","п":"p","р":"r",
+        "с":"s","т":"t","у":"u","ф":"f","х":"h","ц":"c","ч":"ch","ш":"sh","щ":"sch",
+        "ъ":"","ы":"y","ь":"","э":"e","ю":"yu","я":"ya",
+    }
+    s = text.lower().strip()
+    s = "".join(table.get(ch, ch) for ch in s)
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    return s or "group"
+
+
+async def _set_group_default(db: AsyncSession, group_id: Optional[int], product_id: int, is_default: bool):
+    """Назначает товар вариантом по умолчанию для группы, если is_default."""
+    if not group_id or not is_default:
+        return
+    g = (await db.execute(select(ProductGroup).where(ProductGroup.id == group_id))).scalar_one_or_none()
+    if g:
+        g.default_product_id = product_id
+
+
 @router.get("/products/new", response_class=HTMLResponse)
 async def admin_product_new(request: Request, db: AsyncSession = Depends(get_db)):
     cats = (await db.execute(select(Category).order_by(Category.sort_order))).scalars().all()
+    groups = (await db.execute(select(ProductGroup).order_by(ProductGroup.name))).scalars().all()
     return _tmpl("admin/product_form.html", request, {
-        "active": "products", "product": None, "categories": cats, "error": None,
+        "active": "products", "product": None, "categories": cats, "groups": groups, "error": None,
     })
 
 
@@ -322,25 +368,29 @@ async def admin_product_create(
     price: int = Form(...),
     description: str = Form(""), composition: str = Form(""),
     kcal: str = Form(""), protein: str = Form(""), fat: str = Form(""), carbs: str = Form(""),
-    weight: str = Form(""), sort_order: int = Form(0), group_id: str = Form(""),
+    weight: str = Form(""), sort_order: int = Form(0),
+    group_id: str = Form(""), group_new: str = Form(""),
+    variant_label: str = Form(""), is_default: str = Form(""),
     is_visible: str = Form(""), label_popular: str = Form(""), label_new: str = Form(""),
     images: list[UploadFile] = File(default=[]),
     db: AsyncSession = Depends(get_db),
 ):
     cats = (await db.execute(select(Category).order_by(Category.sort_order))).scalars().all()
+    groups = (await db.execute(select(ProductGroup).order_by(ProductGroup.name))).scalars().all()
     if not category_id:
         return _tmpl("admin/product_form.html", request, {
-            "active": "products", "product": None, "categories": cats,
+            "active": "products", "product": None, "categories": cats, "groups": groups,
             "error": "Выберите категорию",
         })
     # проверяем уникальность slug
     existing = (await db.execute(select(Product).where(Product.slug == slug))).scalar_one_or_none()
     if existing:
         return _tmpl("admin/product_form.html", request, {
-            "active": "products", "product": None, "categories": cats,
+            "active": "products", "product": None, "categories": cats, "groups": groups,
             "error": f"Slug «{slug}» уже занят",
         })
 
+    gid = await _resolve_group(db, group_id, group_new)
     p = Product(
         name=name, slug=slug,
         category_id=int(category_id) if category_id else None,
@@ -353,13 +403,15 @@ async def admin_product_create(
         carbs=float(carbs) if carbs else None,
         weight=weight or None,
         sort_order=sort_order,
-        group_id=int(group_id) if group_id else None,
+        group_id=gid,
+        variant_label=(variant_label.strip() or None) if gid else None,
         is_visible=bool(is_visible),
         label_popular=bool(label_popular),
         label_new=bool(label_new),
     )
     db.add(p)
     await db.flush()
+    await _set_group_default(db, gid, p.id, bool(is_default))
     await _save_images(db, p.id, images)
     await db.commit()
     return _r(f"/admin/products?msg=Товар+создан")
@@ -375,8 +427,15 @@ async def admin_product_edit(request: Request, product_id: int, db: AsyncSession
     if not product:
         raise HTTPException(status_code=404)
     cats = (await db.execute(select(Category).order_by(Category.sort_order))).scalars().all()
+    groups = (await db.execute(select(ProductGroup).order_by(ProductGroup.name))).scalars().all()
+    # является ли товар вариантом по умолчанию своей группы
+    is_default = False
+    if product.group_id:
+        g = (await db.execute(select(ProductGroup).where(ProductGroup.id == product.group_id))).scalar_one_or_none()
+        is_default = bool(g and g.default_product_id == product.id)
     return _tmpl("admin/product_form.html", request, {
-        "active": "products", "product": product, "categories": cats, "error": None,
+        "active": "products", "product": product, "categories": cats,
+        "groups": groups, "is_default": is_default, "error": None,
     })
 
 
@@ -386,7 +445,9 @@ async def admin_product_update(
     name: str = Form(...), slug: str = Form(...), category_id: str = Form(""),
     price: int = Form(...), description: str = Form(""), composition: str = Form(""),
     kcal: str = Form(""), protein: str = Form(""), fat: str = Form(""), carbs: str = Form(""),
-    weight: str = Form(""), sort_order: int = Form(0), group_id: str = Form(""),
+    weight: str = Form(""), sort_order: int = Form(0),
+    group_id: str = Form(""), group_new: str = Form(""),
+    variant_label: str = Form(""), is_default: str = Form(""),
     is_visible: str = Form(""), label_popular: str = Form(""), label_new: str = Form(""),
     images: list[UploadFile] = File(default=[]),
     db: AsyncSession = Depends(get_db),
@@ -400,8 +461,9 @@ async def admin_product_update(
 
     if not category_id:
         cats = (await db.execute(select(Category).order_by(Category.sort_order))).scalars().all()
+        groups = (await db.execute(select(ProductGroup).order_by(ProductGroup.name))).scalars().all()
         return _tmpl("admin/product_form.html", request, {
-            "active": "products", "product": product, "categories": cats,
+            "active": "products", "product": product, "categories": cats, "groups": groups,
             "error": "Выберите категорию",
         })
 
@@ -411,11 +473,13 @@ async def admin_product_update(
     )).scalar_one_or_none()
     if dup:
         cats = (await db.execute(select(Category).order_by(Category.sort_order))).scalars().all()
+        groups = (await db.execute(select(ProductGroup).order_by(ProductGroup.name))).scalars().all()
         return _tmpl("admin/product_form.html", request, {
-            "active": "products", "product": product, "categories": cats,
+            "active": "products", "product": product, "categories": cats, "groups": groups,
             "error": f"Slug «{slug}» уже занят",
         })
 
+    gid = await _resolve_group(db, group_id, group_new)
     product.name        = name
     product.slug        = slug
     product.category_id = int(category_id) if category_id else None
@@ -428,11 +492,13 @@ async def admin_product_update(
     product.carbs       = float(carbs) if carbs else None
     product.weight      = weight or None
     product.sort_order  = sort_order
-    product.group_id    = int(group_id) if group_id else None
+    product.group_id    = gid
+    product.variant_label = (variant_label.strip() or None) if gid else None
     product.is_visible  = bool(is_visible)
     product.label_popular = bool(label_popular)
     product.label_new   = bool(label_new)
 
+    await _set_group_default(db, gid, product.id, bool(is_default))
     await _save_images(db, product_id, images)
     await db.commit()
     return _r(f"/admin/products/{product_id}/edit?msg=Сохранено")
