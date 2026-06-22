@@ -192,7 +192,9 @@ const MIN_ORDER = 500;
 
 const checkout = {
   mode: 'delivery',
-  deliveryPrice: 0,
+  deliveryPrice: 0,      // базовая цена доставки зоны
+  freeFrom: null,        // порог бесплатной доставки (₽), null = нет
+  inZone: null,          // null — адрес не определён, true/false — в зоне/вне зоны
   slots: [],
   _promoCode: null,
   _promoDiscount: 0,
@@ -350,16 +352,23 @@ const checkout = {
     this._updateTotals();
   },
 
+  // фактическая цена доставки с учётом порога бесплатной доставки
+  _effectiveDelivery() {
+    if (this.mode !== 'delivery') return 0;
+    if (this.freeFrom != null && cart.total >= this.freeFrom) return 0;
+    return this.deliveryPrice;
+  },
+
   _updateTotals() {
     const subtotal  = cart.total;
-    const delivery  = this.mode === 'delivery' ? this.deliveryPrice : 0;
+    const delivery  = this._effectiveDelivery();
     const discount  = this._promoDiscount;
     const cashback  = this._cashbackSpend;
     const total     = Math.max(1, subtotal - discount - cashback + delivery);
 
     const fmt = n => n.toLocaleString('ru') + ' ₽';
     _setText('s-subtotal', fmt(subtotal));
-    _setText('s-delivery', this.deliveryPrice === 0 && this.mode === 'delivery' ? 'Бесплатно' : fmt(delivery));
+    _setText('s-delivery', delivery === 0 && this.mode === 'delivery' ? 'Бесплатно' : fmt(delivery));
 
     // строки скидки и кешбэка в итого
     let discountRow = document.getElementById('s-discount-row');
@@ -489,6 +498,8 @@ const checkout = {
     if (this.mode === 'delivery') {
       if (!document.getElementById('f-street')?.value.trim()) errs.push('Укажите улицу');
       if (!document.getElementById('f-house')?.value.trim())  errs.push('Укажите дом');
+      if (this.inZone === false) errs.push('Адрес вне зоны доставки — укажите другой');
+      else if (this.inZone === null) errs.push('Выберите адрес на карте, чтобы проверить зону доставки');
     }
     if (!document.getElementById('f-date')?.value)  errs.push('Выберите дату');
     if (!document.getElementById('f-slot')?.value)  errs.push('Выберите время доставки');
@@ -540,6 +551,8 @@ const checkout = {
       name:            document.getElementById('f-name').value.trim(),
       phone:           document.getElementById('f-phone').value.trim(),
       address:         this._buildAddress(),
+      lat:             deliveryMap._lat,
+      lon:             deliveryMap._lon,
       delivery_mode:   this.mode,
       delivery_date:   document.getElementById('f-date').value,
       slot_start:      slotStart,
@@ -777,12 +790,16 @@ const deliveryMap = {
         hint.textContent = `✓ ${data.zone.name}: доставка ${dp === 0 ? 'бесплатно' : dp + ' ₽'}` +
           (free ? ` (бесплатно от ${free} ₽)` : '');
         checkout.deliveryPrice = dp;
+        checkout.freeFrom = free || null;
+        checkout.inZone = true;
       } else {
         hint.style.display = '';
         hint.style.color = '#8b1a1a';
         hint.style.background = '#fff0f0';
         hint.textContent = '✗ Адрес вне зоны доставки. Укажите другой адрес.';
         checkout.deliveryPrice = 0;
+        checkout.freeFrom = null;
+        checkout.inZone = false;
       }
       checkout._updateTotals();
     } catch { /* silent */ }

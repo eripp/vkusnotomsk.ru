@@ -617,11 +617,13 @@ img { display: block; max-width: 100%; }
   min-width: 0;
 }
 .co-field input:focus, .co-field select:focus, .co-field textarea:focus {
-  border-color: #e63900;
+  border-color: var(--brand);
   background: #fff;
 }
+/* плейсхолдеры светлее — чтобы не путались с введёнными данными */
+.co-field input::placeholder, .co-field textarea::placeholder { color: #c4c4c4; }
 
-.co-fields-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
+.co-fields-row { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
 .co-fields-row > .co-field { min-width: 0; }
 /* ряд адреса: Дом / Квартира / Этаж / Подъезд — равные колонки */
 .co-fields-row.co-address-row { grid-template-columns: repeat(4, 1fr); }
@@ -649,7 +651,7 @@ img { display: block; max-width: 100%; }
   font-size: 14px;
   cursor: pointer;
 }
-.co-suggest li:hover, .co-suggest li.active { background: #fff0eb; color: #e63900; }
+.co-suggest li:hover, .co-suggest li.active { background: #fff0eb; color: var(--brand); }
 
 .co-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
 .co-tab {
@@ -664,9 +666,9 @@ img { display: block; max-width: 100%; }
   transition: all .15s;
 }
 .co-tab.active {
-  border-color: #e63900;
+  border-color: var(--brand);
   background: #fff5f2;
-  color: #e63900;
+  color: var(--brand);
 }
 
 .co-zone-info {
@@ -697,8 +699,8 @@ img { display: block; max-width: 100%; }
   cursor: pointer;
   transition: border-color .15s;
 }
-.co-pay-opt:has(input:checked) { border-color: #e63900; background: #fff5f2; }
-.co-pay-opt input { accent-color: #e63900; width: 16px; height: 16px; }
+.co-pay-opt:has(input:checked) { border-color: var(--brand); }
+.co-pay-opt input { accent-color: var(--brand); width: 16px; height: 16px; }
 .co-pay-label { font-size: 15px; font-weight: 500; }
 
 .co-hint { font-size: 13px; color: #888; margin-bottom: 12px; }
@@ -740,7 +742,7 @@ img { display: block; max-width: 100%; }
   padding-top: 12px;
 }
 .co-empty { color: #aaa; font-size: 14px; padding: 12px 0; }
-.co-empty a { color: #e63900; }
+.co-empty a { color: var(--brand); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ORDER SUCCESS — страница подтверждения
@@ -867,7 +869,7 @@ img { display: block; max-width: 100%; }
   transition: background .12s, color .12s;
 }
 .acct-nav-item:hover { background: #f5f5f3; }
-.acct-nav-item.active { background: #fff5f2; color: #e63900; font-weight: 700; }
+.acct-nav-item.active { background: #fff5f2; color: var(--brand); font-weight: 700; }
 
 .acct-logout {
   margin-top: 8px;
@@ -878,7 +880,7 @@ img { display: block; max-width: 100%; }
   cursor: pointer;
   text-decoration: underline;
 }
-.acct-logout:hover { color: #e63900; }
+.acct-logout:hover { color: var(--brand); }
 
 .acct-main { flex: 1; min-width: 0; }
 .acct-tab {}
@@ -934,7 +936,7 @@ img { display: block; max-width: 100%; }
 
 /* Кешбэк */
 .acct-cashback-balance {
-  background: linear-gradient(135deg, #e63900, #ff7a3d);
+  background: linear-gradient(135deg, var(--brand), #ff7a3d);
   color: #fff;
   border-radius: 16px;
   padding: 28px 24px;
@@ -978,7 +980,7 @@ img { display: block; max-width: 100%; }
 .acct-toggle:last-child { border-bottom: none; }
 .acct-toggle input[type=checkbox] {
   width: 18px; height: 18px;
-  accent-color: #e63900;
+  accent-color: var(--brand);
   cursor: pointer;
 }
 

@@ -47,6 +47,8 @@ class CreateOrderIn(BaseModel):
     name: str
     phone: str
     address: str
+    lat: Optional[float] = None
+    lon: Optional[float] = None
     delivery_mode: str = "delivery"
     delivery_date: date
     slot_start: str
@@ -187,8 +189,24 @@ async def create_order(
         if cashback_spend < 0:
             cashback_spend = 0
 
-    # доставка (зоны реализованы, здесь берём 0 как default)
+    # доставка: определяем зону по координатам и считаем цену с учётом порога
+    # бесплатной доставки (порог сравниваем с суммой товаров).
     delivery_price = 0
+    zone_id = None
+    if payload.delivery_mode == "delivery":
+        if payload.lat is None or payload.lon is None:
+            raise HTTPException(status_code=400, detail="Укажите адрес доставки на карте")
+        zres = await db.execute(select(DeliveryZone).where(DeliveryZone.is_active == True))
+        zone = find_zone(payload.lat, payload.lon, zres.scalars().all())
+        if not zone:
+            raise HTTPException(status_code=400, detail="Адрес вне зоны доставки")
+        zone_id = zone.id
+        free_from = zone.free_delivery_from
+        if free_from is not None and subtotal >= free_from:
+            delivery_price = 0
+        else:
+            delivery_price = zone.delivery_price or 0
+
     total_amount = subtotal - discount_amount - cashback_spend + delivery_price
     if total_amount < 1:
         total_amount = 1
@@ -205,6 +223,9 @@ async def create_order(
         user_id=current_user.id if current_user else None,
         phone=payload.phone,
         address=payload.address,
+        address_lat=payload.lat,
+        address_lon=payload.lon,
+        zone_id=zone_id,
         delivery_date=payload.delivery_date,
         slot_start=slot_start,
         slot_end=slot_end,
