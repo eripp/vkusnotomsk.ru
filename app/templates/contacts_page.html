@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Контакты · {{ site_name(request) }} Томск{% endblock %}
+{% block meta_desc %}Контакты, адрес и точки продаж {{ site_name(request) }} — доставка готовой еды по Томску.{% endblock %}
+
+{% block body %}
+{% set ss = request.state.site_settings %}
+<header class="header">
+  <div class="header-inner">
+    <button class="burger-btn" id="burger-btn" aria-label="Меню" onclick="navPanel.open()"><span></span><span></span><span></span></button>
+    <a href="/" class="logo"><img src="/static/img/logo.svg" alt="{{ site_name(request) }}"></a>
+    <a href="/" class="checkout-back">← В меню</a>
+  </div>
+</header>
+
+<main class="content-page contacts-page">
+  <h1 class="content-page-title">Контакты</h1>
+
+  <div class="contacts-layout">
+    <!-- Левая колонка: контакты -->
+    <div class="contacts-info">
+      {% set phone_tel = (ss.get('contact_phone') or '') | replace(' ','') | replace('(','') | replace(')','') | replace('-','') %}
+      <div class="contacts-card">
+        {% if ss.get('contact_address') %}
+        <div class="contacts-row"><span class="contacts-ico">📍</span>
+          <span>{{ ss['contact_address'] }}</span>
+        </div>
+        {% endif %}
+        {% if ss.get('contact_phone') %}
+        <div class="contacts-row"><span class="contacts-ico">📞</span>
+          <a href="tel:{{ phone_tel }}">{{ ss['contact_phone'] }}</a>
+        </div>
+        {% endif %}
+        {% if ss.get('contact_hours') %}
+        <div class="contacts-row"><span class="contacts-ico">🕐</span>
+          <span>Обрабатываем заказы: с {{ ss['contact_hours'] | replace('-', ' до ') }}</span>
+        </div>
+        {% endif %}
+        {% if ss.get('contact_email') %}
+        <div class="contacts-row"><span class="contacts-ico">✉️</span>
+          <a href="mailto:{{ ss['contact_email'] }}">{{ ss['contact_email'] }}</a>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Соцсети -->
+      {% if ss.get('contact_vk') or ss.get('contact_tg') or ss.get('contact_max') %}
+      <div class="contacts-card">
+        <div class="contacts-card-title">Мы в соцсетях</div>
+        <div class="footer-socials">
+          {% if ss.get('contact_vk') %}<a href="{{ ss['contact_vk'] }}" target="_blank" rel="noopener" class="footer-social" aria-label="ВКонтакте"><img src="/static/img/vk_logo.svg" alt="ВКонтакте"></a>{% endif %}
+          {% if ss.get('contact_tg') %}<a href="{{ ss['contact_tg'] }}" target="_blank" rel="noopener" class="footer-social" aria-label="Telegram"><img src="/static/img/telegram_logo.svg" alt="Telegram"></a>{% endif %}
+          {% if ss.get('contact_max') %}<a href="{{ ss['contact_max'] }}" target="_blank" rel="noopener" class="footer-social" aria-label="MAX"><img src="/static/img/max_logo.svg" alt="MAX"></a>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Юридическая информация -->
+      {% if ss.get('legal_info') %}
+      <div class="contacts-card">
+        <div class="contacts-card-title">Юридическая информация</div>
+        <div class="contacts-legal">{{ ss['legal_info'] }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Правая колонка: карта -->
+    <div class="contacts-map-col">
+      {% if ss.get('yandex_maps_key') and ss.get('contact_lat') and ss.get('contact_lon') %}
+      <div id="ya-map" class="contacts-map"></div>
+      <script src="https://api-maps.yandex.ru/2.1/?apikey={{ ss['yandex_maps_key'] }}&lang=ru_RU"></script>
+      <script>
+        (function () {
+          const lat = parseFloat({{ ss['contact_lat'] | tojson }});
+          const lon = parseFloat({{ ss['contact_lon'] | tojson }});
+          const mapEl = document.getElementById('ya-map');
+          if (!isFinite(lat) || !isFinite(lon)) {
+            mapEl.innerHTML = '<div style="padding:40px;text-align:center;color:#999">Неверные координаты в настройках</div>';
+            return;
+          }
+          if (typeof ymaps === 'undefined') {
+            mapEl.innerHTML = '<div style="padding:40px;text-align:center;color:#999">Карта недоступна (проверьте API-ключ Яндекс.Карт)</div>';
+            return;
+          }
+          ymaps.ready(() => {
+            try {
+              const coords = [lat, lon];
+              const map = new ymaps.Map('ya-map', { center: coords, zoom: 15, controls: ['zoomControl'] });
+              map.geoObjects.add(new ymaps.Placemark(coords, {
+                balloonContent: {{ (ss.get('contact_address') or site_name(request)) | tojson }}
+              }, { preset: 'islands#redDotIcon' }));
+            } catch (e) {
+              console.error('Я.Карты:', e);
+              mapEl.innerHTML = '<div style="padding:40px;text-align:center;color:#999">Не удалось загрузить карту</div>';
+            }
+          });
+        })();
+      </script>
+      {% else %}
+      <div class="contacts-map contacts-map-empty">
+        <p>Карта не настроена.<br><small>Укажите API-ключ Яндекс.Карт и координаты в админке.</small></p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</main>
+{% endblock %}

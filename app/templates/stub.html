@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ title }} · Вкусно{% endblock %}
+{% block title %}{{ title }} · {{ site_name(request) }}{% endblock %}
 {% block body %}
 <div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui">
   <h2>{{ title }} — скоро</h2>

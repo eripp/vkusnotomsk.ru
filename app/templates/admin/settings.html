@@ -19,6 +19,10 @@
     <div class="adm-card-title">Оформление</div>
     <div class="adm-form">
       <div class="adm-field">
+        <label>Название бренда <span style="color:#aaa;font-weight:400">— используется в шапке, подвале, title, OG (site_name)</span></label>
+        <input name="site_name" value="{{ val('site_name') }}" placeholder="Фабрика-кухня Вкусно">
+      </div>
+      <div class="adm-field">
         <label>Фирменный цвет <span style="color:#aaa;font-weight:400">— кнопки, акценты на сайте (brand_color)</span></label>
         <div style="display:flex;align-items:center;gap:10px">
           <input type="color" id="brand-color-picker"
@@ -41,6 +45,88 @@
                  placeholder="#d44f1a" style="max-width:140px;font-family:monospace">
           <span style="color:#aaa;font-size:12px">по умолчанию #d44f1a</span>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Контакты (для бокового меню и подвала) -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Контакты</div>
+    <div class="adm-form">
+      <div class="adm-field-row">
+        <div class="adm-field">
+          <label>Город <span style="color:#aaa;font-weight:400">— contact_city</span></label>
+          <input name="contact_city" value="{{ val('contact_city') or 'Томск' }}" placeholder="Томск">
+        </div>
+        <div class="adm-field">
+          <label>Время работы <span style="color:#aaa;font-weight:400">— contact_hours</span></label>
+          <input name="contact_hours" value="{{ val('contact_hours') or '10:00-17:00' }}" placeholder="10:00-17:00">
+        </div>
+      </div>
+      <div class="adm-field-row">
+        <div class="adm-field">
+          <label>Телефон <span style="color:#aaa;font-weight:400">— contact_phone</span></label>
+          <input name="contact_phone" value="{{ val('contact_phone') }}" placeholder="+7 (3822) 713-100">
+        </div>
+        <div class="adm-field">
+          <label>Email <span style="color:#aaa;font-weight:400">— contact_email</span></label>
+          <input name="contact_email" value="{{ val('contact_email') }}" placeholder="mail@vkusnotomsk.ru">
+        </div>
+      </div>
+      <div class="adm-field-row">
+        <div class="adm-field">
+          <label>Ссылка ВКонтакте <span style="color:#aaa;font-weight:400">— contact_vk</span></label>
+          <input name="contact_vk" value="{{ val('contact_vk') }}" placeholder="https://vk.com/vkusnotomsk">
+        </div>
+        <div class="adm-field">
+          <label>Ссылка Telegram <span style="color:#aaa;font-weight:400">— contact_tg</span></label>
+          <input name="contact_tg" value="{{ val('contact_tg') }}" placeholder="https://t.me/...">
+        </div>
+      </div>
+      <div class="adm-field">
+        <label>Ссылка MAX <span style="color:#aaa;font-weight:400">— contact_max</span></label>
+        <input name="contact_max" value="{{ val('contact_max') }}" placeholder="https://max.ru/join/...">
+      </div>
+      <div class="adm-field">
+        <label>Адрес / точка продаж <span style="color:#aaa;font-weight:400">— contact_address (для подвала)</span></label>
+        <textarea name="contact_address" rows="2" placeholder="Пролетарская ул., 38/2, Томск, Томская обл., Россия, 634009">{{ val('contact_address') }}</textarea>
+      </div>
+      <div class="adm-field">
+        <label>Юридическая информация <span style="color:#aaa;font-weight:400">— legal_info</span></label>
+        <textarea name="legal_info" rows="2" placeholder="ИП Аникин Николай Юрьевич, ОГРНИП 312701720500163, ИНН 701729268409">{{ val('legal_info') }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Карта (страница Контакты) -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Карта (страница «Контакты»)</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>API-ключ Яндекс.Карт <span style="color:#aaa;font-weight:400">— yandex_maps_key</span></label>
+        <input name="yandex_maps_key" value="{{ val('yandex_maps_key') }}" placeholder="xxxxxxxx-xxxx-xxxx-...">
+      </div>
+      <div class="adm-field-row">
+        <div class="adm-field">
+          <label>Широта (lat) <span style="color:#aaa;font-weight:400">— contact_lat</span></label>
+          <input name="contact_lat" value="{{ val('contact_lat') }}" placeholder="56.484">
+        </div>
+        <div class="adm-field">
+          <label>Долгота (lon) <span style="color:#aaa;font-weight:400">— contact_lon</span></label>
+          <input name="contact_lon" value="{{ val('contact_lon') }}" placeholder="84.948">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Контент-страницы -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Страница «Условия доставки»</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>HTML-содержимое <span style="color:#aaa;font-weight:400">— delivery_terms_html (страница /delivery)</span></label>
+        <textarea name="delivery_terms_html" rows="12" style="font-family:monospace;font-size:13px">{{ val('delivery_terms_html') }}</textarea>
+        <span style="color:#aaa;font-size:12px">Можно использовать HTML: &lt;h2&gt;, &lt;ul&gt;&lt;li&gt;, &lt;b&gt;, &lt;p&gt; и т.д.</span>
       </div>
     </div>
   </div>

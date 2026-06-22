@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- ── Базовые мета ──────────────────────────────────────────── -->
-  <title>{% block title %}{% if meta_title %}{{ meta_title }}{% else %}Вкусно — доставка еды по Томску{% endif %}{% endblock %}</title>
-  <meta name="description" content="{% block meta_desc %}{% if meta_desc %}{{ meta_desc }}{% else %}Вкусно — доставка домашней еды по Томску. Горячие блюда, салаты, супы с доставкой за 60 минут. Заказывайте онлайн!{% endif %}{% endblock %}">
+  <title>{% block title %}{% if meta_title %}{{ meta_title }}{% else %}{{ site_name(request) }} — доставка еды по Томску{% endif %}{% endblock %}</title>
+  <meta name="description" content="{% block meta_desc %}{% if meta_desc %}{{ meta_desc }}{% else %}{{ site_name(request) }} — доставка домашней еды по Томску. Горячие блюда, салаты, супы с доставкой за 60 минут. Заказывайте онлайн!{% endif %}{% endblock %}">
   <meta name="robots" content="{% block robots %}index, follow{% endblock %}">
 
   <!-- ── Canonical ─────────────────────────────────────────────── -->
@@ -14,10 +14,10 @@
 
   <!-- ── Open Graph ────────────────────────────────────────────── -->
   <meta property="og:type"        content="{% block og_type %}website{% endblock %}">
-  <meta property="og:site_name"   content="Вкусно Томск">
+  <meta property="og:site_name"   content="{{ site_name(request) }}">
   <meta property="og:locale"      content="ru_RU">
   <meta property="og:url"         content="{{ SITE_URL }}{{ request.url.path }}">
-  <meta property="og:title"       content="{% block og_title %}{% if meta_title %}{{ meta_title }}{% else %}Вкусно — доставка еды по Томску{% endif %}{% endblock %}">
+  <meta property="og:title"       content="{% block og_title %}{% if meta_title %}{{ meta_title }}{% else %}{{ site_name(request) }} — доставка еды по Томску{% endif %}{% endblock %}">
   <meta property="og:description" content="{% block og_desc %}{% if meta_desc %}{{ meta_desc }}{% else %}Доставка домашней еды по Томску — быстро и вкусно!{% endif %}{% endblock %}">
   <meta property="og:image"       content="{% block og_image %}{{ SITE_URL }}/static/img/og-default.jpg{% endblock %}">
   <meta property="og:image:width"  content="1200">
@@ -25,7 +25,7 @@
 
   <!-- ── Twitter Card ──────────────────────────────────────────── -->
   <meta name="twitter:card"        content="summary_large_image">
-  <meta name="twitter:title"       content="{% block tw_title %}{% if meta_title %}{{ meta_title }}{% else %}Вкусно — доставка еды по Томску{% endif %}{% endblock %}">
+  <meta name="twitter:title"       content="{% block tw_title %}{% if meta_title %}{{ meta_title }}{% else %}{{ site_name(request) }} — доставка еды по Томску{% endif %}{% endblock %}">
   <meta name="twitter:description" content="{% block tw_desc %}{% if meta_desc %}{{ meta_desc }}{% else %}Доставка домашней еды по Томску!{% endif %}{% endblock %}">
   <meta name="twitter:image"       content="{% block tw_image %}{{ SITE_URL }}/static/img/og-default.jpg{% endblock %}">
 
@@ -44,7 +44,7 @@
   {
     "@context": "https://schema.org",
     "@type": "FoodEstablishment",
-    "name": "Вкусно",
+    "name": "{{ site_name(request) }}",
     "url": "{{ SITE_URL }}",
     "logo": "{{ SITE_URL }}/static/img/logo.svg",
     "image": "{{ SITE_URL }}/static/img/og-default.jpg",
@@ -80,7 +80,115 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+{% set _ss = request.state.site_settings %}
 {% block body %}{% endblock %}
+
+{% block footer %}
+<!-- ═══ ПОДВАЛ ══════════════════════════════════════════════════════════════ -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <!-- Колонка 1: лого + адрес -->
+    <div class="footer-col footer-brand">
+      <a href="/" class="footer-logo"><img src="/static/img/logo.svg" alt="{{ site_name(request) }}"></a>
+      <div class="footer-city">{{ _ss.get('contact_city') or 'Томск' }}</div>
+      {% if _ss.get('contact_address') %}
+      <div class="footer-addr-title">{{ site_name(request) }}</div>
+      <div class="footer-addr">{{ _ss['contact_address'] }}</div>
+      {% endif %}
+      {% if _ss.get('contact_phone') %}
+      <a href="tel:{{ _ss['contact_phone'] | replace(' ','') | replace('(','') | replace(')','') | replace('-','') }}" class="footer-addr-phone">{{ _ss['contact_phone'] }}</a>
+      {% endif %}
+      {% if _ss.get('contact_hours') %}
+      <div class="footer-hours">Обрабатываем заказы: с {{ _ss['contact_hours'] | replace('-', ' до ') }}</div>
+      {% endif %}
+    </div>
+
+    <!-- Колонка 2: меню -->
+    <div class="footer-col">
+      <a href="/" class="footer-link">Меню</a>
+      <a href="/delivery" class="footer-link">Условия доставки</a>
+      <a href="#" class="footer-link">Акции</a>
+      <a href="#" class="footer-link">Публичная оферта</a>
+      <a href="#" class="footer-link">Политика конфиденциальности</a>
+      <a href="/contacts" class="footer-link">Контакты</a>
+    </div>
+
+    <!-- Колонка 3: контакты -->
+    <div class="footer-col footer-contacts-col">
+      {% if _ss.get('contact_phone') %}
+      <a href="tel:{{ _ss['contact_phone'] | replace(' ','') | replace('(','') | replace(')','') | replace('-','') }}" class="footer-phone">{{ _ss['contact_phone'] }}</a>
+      {% endif %}
+      <div class="footer-socials">
+        {% if _ss.get('contact_vk') %}
+        <a href="{{ _ss['contact_vk'] }}" target="_blank" rel="noopener" class="footer-social" aria-label="ВКонтакте"><img src="/static/img/vk_logo.svg" alt="ВКонтакте"></a>
+        {% endif %}
+        {% if _ss.get('contact_tg') %}
+        <a href="{{ _ss['contact_tg'] }}" target="_blank" rel="noopener" class="footer-social" aria-label="Telegram"><img src="/static/img/telegram_logo.svg" alt="Telegram"></a>
+        {% endif %}
+        {% if _ss.get('contact_max') %}
+        <a href="{{ _ss['contact_max'] }}" target="_blank" rel="noopener" class="footer-social" aria-label="MAX"><img src="/static/img/max_logo.svg" alt="MAX"></a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</footer>
+{% endblock %}
+
+<!-- ═══ ВЫЕЗЖАЮЩАЯ ПАНЕЛЬ НАВИГАЦИИ ════════════════════════════════════════ -->
+<div class="nav-overlay" id="nav-overlay" onclick="navPanel.close()"></div>
+<aside class="nav-panel" id="nav-panel" aria-label="Меню сайта">
+  <button class="nav-close" onclick="navPanel.close()" aria-label="Закрыть">✕</button>
+
+  <!-- Профиль -->
+  <a href="/account" class="nav-profile" id="nav-profile">
+    <span class="nav-profile-name" id="nav-profile-name">Личный кабинет</span>
+    <span class="nav-profile-arrow">›</span>
+  </a>
+
+  <nav class="nav-section">
+    <a href="/account" class="nav-link">Мои заказы</a>
+    <a href="/account" class="nav-link">Мои адреса</a>
+  </nav>
+
+  <!-- Город + время работы -->
+  <div class="nav-city">
+    <div class="nav-city-name">{{ _ss.get('contact_city') or 'Томск' }}</div>
+    {% if _ss.get('contact_hours') %}
+    <div class="nav-city-hours">Обрабатываем заказы: с {{ _ss['contact_hours'] | replace('-', ' до ') }}</div>
+    {% endif %}
+  </div>
+
+  <!-- Меню -->
+  <nav class="nav-section">
+    <a href="/" class="nav-link nav-link-plain">Меню</a>
+    <a href="/delivery" class="nav-link nav-link-plain">Условия доставки</a>
+    <a href="#" class="nav-link nav-link-plain">Публичная оферта</a>
+    <a href="#" class="nav-link nav-link-plain">Акции</a>
+    <a href="/contacts" class="nav-link nav-link-plain">Контакты</a>
+  </nav>
+
+  <!-- Контакты -->
+  {% if _ss.get('contact_phone') or _ss.get('contact_vk') or _ss.get('contact_email') %}
+  <div class="nav-contacts">
+    <div class="nav-group-title">Связаться с нами</div>
+    {% if _ss.get('contact_phone') %}
+    <a href="tel:{{ _ss['contact_phone'] | replace(' ', '') | replace('(', '') | replace(')', '') | replace('-', '') }}" class="nav-phone">{{ _ss['contact_phone'] }}</a>
+    {% endif %}
+    {% if _ss.get('contact_vk') %}
+    <a href="{{ _ss['contact_vk'] }}" target="_blank" rel="noopener" class="nav-link-sm"><img src="/static/img/vk_logo.svg" alt=""> Мы в VK</a>
+    {% endif %}
+    {% if _ss.get('contact_tg') %}
+    <a href="{{ _ss['contact_tg'] }}" target="_blank" rel="noopener" class="nav-link-sm"><img src="/static/img/telegram_logo.svg" alt=""> Мы в Telegram</a>
+    {% endif %}
+    {% if _ss.get('contact_max') %}
+    <a href="{{ _ss['contact_max'] }}" target="_blank" rel="noopener" class="nav-link-sm"><img src="/static/img/max_logo.svg" alt=""> Мы в MAX</a>
+    {% endif %}
+    {% if _ss.get('contact_email') %}
+    <a href="mailto:{{ _ss['contact_email'] }}" class="nav-link-sm">{{ _ss['contact_email'] }}</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</aside>
 
 <!-- ═══ МОДАЛ АВТОРИЗАЦИИ (OTP) ════════════════════════════════════════════ -->
 <div class="auth-overlay" id="auth-overlay" onclick="auth.close()"></div>
@@ -113,6 +221,24 @@
 <script src="/static/js/cart.js"></script>
 <script src="/static/js/main.js"></script>
 <script>
+// ─── Выезжающая панель навигации ─────────────────────────────────────────────
+const navPanel = {
+  open() {
+    document.getElementById('nav-overlay').classList.add('open');
+    document.getElementById('nav-panel').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  },
+  close() {
+    document.getElementById('nav-overlay').classList.remove('open');
+    document.getElementById('nav-panel').classList.remove('open');
+    document.body.style.overflow = '';
+  },
+};
+// Esc закрывает панель
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') navPanel.close();
+});
+
 // ─── Авторизация по OTP (общая модалка) ──────────────────────────────────────
 const auth = {
   open() {

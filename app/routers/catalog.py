@@ -254,6 +254,23 @@ async def index(request: Request, db: AsyncSession = Depends(get_db)):
     })
 
 
+@router.get("/delivery", response_class=HTMLResponse)
+async def delivery_page(request: Request):
+    """Страница «Условия доставки» — HTML редактируется в админке."""
+    ss = getattr(request.state, "site_settings", {}) or {}
+    return templates.TemplateResponse("content_page.html", {
+        "request": request,
+        "page_title": "Условия доставки",
+        "page_html": ss.get("delivery_terms_html") or "",
+    })
+
+
+@router.get("/contacts", response_class=HTMLResponse)
+async def contacts_page(request: Request):
+    """Страница «Контакты» — данные из настроек + карта Яндекс."""
+    return templates.TemplateResponse("contacts_page.html", {"request": request})
+
+
 @router.get("/category/{slug}", response_class=HTMLResponse)
 async def category_page(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     categories = await _get_categories(db)

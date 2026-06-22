@@ -23,12 +23,74 @@ img { display: block; max-width: 100%; }
 .logo { display: flex; align-items: center; font-size: 18px; font-weight: 800; white-space: nowrap; }
 .logo span { color: var(--brand); }
 .logo img { height: 38px; width: auto; }
+
+/* Бургер-кнопка */
+.burger-btn {
+  width: 38px; height: 38px; flex-shrink: 0;
+  display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px;
+  border-radius: 9px;
+}
+.burger-btn:hover { background: #f5f5f3; }
+.burger-btn span { display: block; width: 20px; height: 2px; background: #1a1a18; border-radius: 2px; }
+
+/* ─── Выезжающая панель навигации ─────────────────────────────────────────── */
+.nav-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  z-index: 320; opacity: 0; pointer-events: none; transition: opacity .25s;
+}
+.nav-overlay.open { opacity: 1; pointer-events: all; }
+.nav-panel {
+  position: fixed; top: 0; left: 0; bottom: 0;
+  width: 300px; max-width: 88vw; background: #fff; z-index: 321;
+  display: flex; flex-direction: column; padding: 20px 22px;
+  transform: translateX(-100%); transition: transform .25s;
+  box-shadow: 4px 0 24px rgba(0,0,0,.12); overflow-y: auto;
+}
+.nav-panel.open { transform: translateX(0); }
+.nav-close {
+  position: absolute; top: 12px; right: 12px;
+  width: 32px; height: 32px; border-radius: 50%; font-size: 16px; color: #888;
+  display: flex; align-items: center; justify-content: center;
+}
+.nav-close:hover { background: #f5f5f3; }
+
+.nav-profile {
+  display: flex; align-items: center; gap: 12px; padding: 6px 0 14px;
+  font-size: 17px; font-weight: 700;
+}
+.nav-profile-icon { font-size: 20px; }
+.nav-profile-name { flex: 1; }
+.nav-profile-arrow { color: #bbb; font-size: 20px; }
+
+.nav-section { display: flex; flex-direction: column; }
+.nav-link {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; font-size: 15px; font-weight: 600; color: #1a1a18;
+}
+.nav-link:hover { color: var(--brand); }
+.nav-link-plain { font-weight: 500; }
+
+.nav-city {
+  border-top: 1px solid #eee; border-bottom: 1px solid #eee;
+  margin: 14px 0; padding: 14px 0;
+}
+.nav-city-name { color: var(--brand); font-weight: 700; font-size: 16px; }
+.nav-city-hours { color: #888; font-size: 13px; margin-top: 2px; }
+
+.nav-group-title { color: var(--brand); font-weight: 700; font-size: 13px; margin: 4px 0 6px; }
+
+.nav-contacts { border-top: 1px solid #eee; margin-top: 14px; padding-top: 14px; }
+.nav-phone { display: block; font-size: 17px; font-weight: 700; margin-bottom: 12px; }
+.nav-link-sm { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #444; padding: 4px 0; }
+.nav-link-sm img { width: 20px; height: 20px; flex-shrink: 0; }
+.nav-link-sm:hover { color: var(--brand); }
 .search-wrap { flex: 1; }
 .search-input {
-  width: 100%; padding: 8px 14px; border: 1.5px solid #e0dfd8;
-  border-radius: 10px; font-size: 14px; outline: none; background: #f9f8f5;
-  transition: border-color .15s;
+  width: 100%; padding: 9px 18px; border: 1.5px solid #e0dfd8;
+  border-radius: 999px; font-size: 14px; outline: none; background: #f9f8f5;
+  transition: border-color .15s, box-shadow .15s;
 }
+.search-input:hover { box-shadow: 0 1px 6px rgba(0,0,0,.08); }
 .search-input:focus { border-color: var(--brand); background: #fff; }
 .cart-btn {
   display: flex; align-items: center; gap: 6px;
@@ -37,6 +99,7 @@ img { display: block; max-width: 100%; }
   white-space: nowrap; transition: background .15s;
 }
 .cart-btn:hover { background: var(--brand-hover); }
+.cart-ico { display: block; flex-shrink: 0; }
 .user-btn {
   display: flex; align-items: center; gap: 6px;
   color: #333; text-decoration: none; font-size: 14px; font-weight: 600;
@@ -58,20 +121,22 @@ img { display: block; max-width: 100%; }
 
 /* ─── Sidebar ────────────────────────────────────────────────────────────── */
 .sidebar {
-  width: 220px; flex-shrink: 0;
-  position: sticky; top: 56px; height: calc(100vh - 56px);
+  width: 220px; flex-shrink: 0; align-self: flex-start;
+  position: sticky; top: 56px; max-height: calc(100vh - 56px);
   overflow-y: auto; padding: 16px 0;
   border-right: 1px solid #e8e6df; background: #fff;
 }
+.cat-search-btn { display: none; }   /* видна только на мобилке (в полосе категорий) */
+.cat-search-box { display: none; }   /* раскрывается на мобилке по тапу 🔍 */
 .cat-nav { display: flex; flex-direction: column; gap: 2px; }
 .cat-item {
   display: flex; align-items: center; gap: 10px;
-  padding: 9px 16px; font-size: 13.5px;
+  padding: 9px 16px; font-size: 13.5px; font-weight: 700;
   border-left: 3px solid transparent; border-radius: 0 8px 8px 0;
   transition: background .12s, color .12s;
 }
 .cat-item:hover { background: #f5f5f3; color: #1a1a18; }
-.cat-item.active { background: var(--brand); color: #fff; font-weight: 600; }
+.cat-item.active { background: var(--brand); color: #fff; }
 .cat-icon { font-size: 16px; width: 20px; text-align: center; }
 
 /* ─── Content ────────────────────────────────────────────────────────────── */
@@ -197,8 +262,8 @@ img { display: block; max-width: 100%; }
   padding: 12px 0; border-bottom: 1px solid #f0efe8;
 }
 .cart-item-img {
-  width: 56px; height: 56px; border-radius: 8px;
-  object-fit: cover; background: #f5f5f3; flex-shrink: 0;
+  width: 126px; height: 94px; border-radius: 8px;
+  object-fit: contain; background: #f5f5f3; flex-shrink: 0;
 }
 .cart-item-img-placeholder {
   width: 56px; height: 56px; border-radius: 8px;
@@ -302,7 +367,57 @@ img { display: block; max-width: 100%; }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .sidebar { display: none; }
+  /* layout в столбик: полоса категорий сверху, контент под ней */
+  .layout { flex-direction: column; }
+
+  /* Сайдбар → горизонтальная sticky-полоса под шапкой */
+  .sidebar {
+    width: 100%; height: auto; flex-shrink: 0;
+    position: sticky; top: 56px; z-index: 150;
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px; overflow: visible;
+    border-right: none; border-bottom: 1px solid #e8e6df;
+  }
+  .cat-search-btn {
+    flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: #f5f5f3;
+  }
+  .cat-search-btn img { width: 18px; height: 18px; display: block; }
+  .cat-nav {
+    flex-direction: row; gap: 4px;
+    flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .cat-nav::-webkit-scrollbar { display: none; }
+  .cat-item {
+    flex-shrink: 0; white-space: nowrap;
+    padding: 8px 14px; border-left: none; border-radius: 999px;
+    background: #f5f5f3; scroll-snap-align: start;
+  }
+  .cat-item:hover { background: #ededed; }
+  .cat-item.active { background: var(--brand); color: #fff; border-left: none; }
+
+  /* режим поиска: полоса показывает поле ввода вместо категорий */
+  .sidebar.searching .cat-search-btn,
+  .sidebar.searching .cat-nav { display: none; }
+  .sidebar.searching .cat-search-box {
+    display: flex; align-items: center; gap: 8px; flex: 1; width: 100%;
+  }
+  .cat-search-box .search-input { flex: 1; }
+  .cat-search-close {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; font-size: 15px; color: #888;
+    display: flex; align-items: center; justify-content: center; background: #f5f5f3;
+  }
+
+  /* поиск в шапке прячем — он раскрывается из полосы */
+  .header .search-wrap { display: none; }
+  .header .user-btn { display: none; }   /* на мобилке вход — из бургер-меню */
+  .header .cart-btn { margin-left: auto; }   /* корзина прижата к правому краю */
+
+  /* якоря не должны прятаться под шапкой + полосой категорий */
+  .cat-section { scroll-margin-top: 120px; }
+
   .content { padding: 16px 12px 48px; }
   .product-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   /* модалка на планшете/мобилке — вертикальная */
@@ -462,8 +577,8 @@ img { display: block; max-width: 100%; }
    CHECKOUT — страница оформления заказа
    ═══════════════════════════════════════════════════════════════════════════ */
 
-.checkout-back { color: #333; text-decoration: none; font-size: 14px; margin-left: 12px; }
-.checkout-back:hover { color: #e63900; }
+.checkout-back { color: #333; text-decoration: none; font-size: 14px; font-weight: 600; margin-left: 12px; }
+.checkout-back:hover { color: var(--brand); }
 
 .checkout-layout {
   display: flex;
@@ -1006,4 +1121,74 @@ img { display: block; max-width: 100%; }
   background: #0006; color: #fff; border-radius: 50%;
   width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
   font-size: 16px; cursor: pointer;
+}
+
+/* ─── Подвал ─────────────────────────────────────────────────────────────── */
+.site-footer {
+  background: #fff; border-top: 1px solid #e8e6df;
+  padding: 36px 24px; margin-top: 40px;
+}
+.footer-inner {
+  max-width: 1200px; margin: 0 auto;
+  display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 32px;
+}
+.footer-logo img { height: 44px; width: auto; margin-bottom: 12px; }
+.footer-city { font-weight: 700; font-size: 15px; margin-bottom: 12px; }
+.footer-addr-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+.footer-addr { color: #444; font-size: 13px; line-height: 1.5; white-space: pre-line; }
+.footer-addr-phone { display: block; color: #444; font-size: 13px; margin-top: 4px; }
+.footer-hours { color: #444; font-size: 13px; margin-top: 4px; }
+.footer-col-title { color: var(--brand); font-weight: 700; font-size: 14px; margin-bottom: 12px; }
+.footer-link { display: block; color: #1a1a18; font-size: 14px; padding: 4px 0; }
+.footer-link:hover { color: var(--brand); }
+.footer-contacts-col { text-align: left; }
+.footer-phone { font-size: 22px; font-weight: 800; display: inline-block; margin-bottom: 12px; white-space: nowrap; }
+.footer-socials { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.footer-social { display: inline-flex; transition: opacity .15s; }
+.footer-social img { width: 34px; height: 34px; display: block; }
+.footer-social:hover { opacity: .8; }
+
+@media (max-width: 700px) {
+  .footer-inner { grid-template-columns: 1fr; gap: 24px; }
+  .footer-phone { font-size: 19px; }
+}
+
+/* ─── Контент-страница (Условия доставки и т.п.) ─────────────────────────── */
+.content-page {
+  max-width: 820px; margin: 0 auto;
+  padding: calc(56px + 32px) 24px 60px;   /* 56px — высота фиксированной шапки */
+}
+.content-page-title { font-size: 30px; font-weight: 800; margin-bottom: 24px; }
+.content-page-body { font-size: 15px; line-height: 1.7; color: #1a1a18; }
+.content-page-body h2 { font-size: 17px; font-weight: 700; margin: 24px 0 10px; }
+.content-page-body h3 { font-size: 15px; font-weight: 700; margin: 18px 0 8px; }
+.content-page-body p { margin: 0 0 12px; }
+.content-page-body ul, .content-page-body ol { margin: 0 0 14px; padding-left: 24px; }
+.content-page-body li { margin-bottom: 6px; }
+.content-page-body b, .content-page-body strong { font-weight: 700; }
+.content-page-body a { color: var(--brand); }
+
+/* ─── Страница «Контакты» ────────────────────────────────────────────────── */
+.contacts-layout {
+  display: grid; grid-template-columns: 340px 1fr; gap: 24px; align-items: start;
+}
+.contacts-info { display: flex; flex-direction: column; gap: 16px; }
+.contacts-card {
+  background: #fff; border: 1px solid #e8e6df; border-radius: 14px; padding: 18px 20px;
+}
+.contacts-card-title { font-weight: 700; font-size: 15px; margin-bottom: 12px; }
+.contacts-row { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; padding: 5px 0; }
+.contacts-row a { color: var(--brand); }
+.contacts-ico { flex-shrink: 0; }
+.contacts-legal { font-size: 13px; color: #666; line-height: 1.6; white-space: pre-line; }
+
+.contacts-map { width: 100%; height: 420px; border-radius: 14px; overflow: hidden; }
+.contacts-map-empty {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  background: #f5f5f3; border: 1px dashed #ccc; color: #999;
+}
+
+@media (max-width: 760px) {
+  .contacts-layout { grid-template-columns: 1fr; }
+  .contacts-map { height: 320px; }
 }

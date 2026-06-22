@@ -1,11 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Заказ #{{ order.id }} принят · Вкусно{% endblock %}
+{% block title %}Заказ #{{ order.id }} принят · {{ site_name(request) }}{% endblock %}
 {% block robots %}noindex, nofollow{% endblock %}
 
 {% block body %}
 <header class="header">
   <div class="header-inner">
-    <a href="/" class="logo"><img src="/static/img/logo.svg" alt="Вкусно — доставка еды по Томску"></a>
+    <button class="burger-btn" id="burger-btn" aria-label="Меню" onclick="navPanel.open()"><span></span><span></span><span></span></button>
+    <a href="/" class="logo"><img src="/static/img/logo.svg" alt="{{ site_name(request) }}"></a>
+    <a href="/" class="checkout-back">← В меню</a>
   </div>
 </header>
 

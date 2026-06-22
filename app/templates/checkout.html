@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Оформление заказа · Вкусно Томск{% endblock %}
+{% block title %}Оформление заказа · {{ site_name(request) }} Томск{% endblock %}
 {% block robots %}noindex, nofollow{% endblock %}
 
 {% block head %}
@@ -10,8 +10,9 @@
 {% block body %}
 <header class="header">
   <div class="header-inner">
-    <a href="/" class="logo"><img src="/static/img/logo.svg" alt="Вкусно — доставка еды по Томску"></a>
-    <a href="/" class="checkout-back">← Назад в меню</a>
+    <button class="burger-btn" id="burger-btn" aria-label="Меню" onclick="navPanel.open()"><span></span><span></span><span></span></button>
+    <a href="/" class="logo"><img src="/static/img/logo.svg" alt="{{ site_name(request) }}"></a>
+    <a href="/" class="checkout-back">← В меню</a>
   </div>
 </header>
 
@@ -55,11 +56,7 @@
       </div>
 
       <div class="co-section">
-        <h2 class="co-section-title">Способ получения</h2>
-        <div class="co-tabs" id="delivery-tabs">
-          <button class="co-tab active" data-mode="delivery" onclick="checkout.setMode('delivery')">🚚 Доставка</button>
-          <button class="co-tab" data-mode="pickup" onclick="checkout.setMode('pickup')">🏠 Самовывоз</button>
-        </div>
+        <h2 class="co-section-title">Адрес доставки</h2>
 
         <div id="delivery-block">
           <div id="delivery-map"></div>
@@ -89,14 +86,6 @@
           </div>
           <div id="zone-info" class="co-zone-info" style="display:none"></div>
         </div>
-
-        <div id="pickup-block" style="display:none">
-          <div class="co-pickup-address">
-            <strong>Адрес самовывоза:</strong><br>
-            г. Томск, ул. Учебная, 48<br>
-            <span class="co-hint">Пн–Вс, 10:00–21:00</span>
-          </div>
-        </div>
       </div>
 
       <div class="co-section">
@@ -121,15 +110,15 @@
         <div class="co-payment-options" id="payment-options">
           <label class="co-pay-opt">
             <input type="radio" name="payment" value="online" checked>
-            <span class="co-pay-label">💳 Онлайн (карта)</span>
+            <span class="co-pay-label">Онлайн (Yoomoney)</span>
           </label>
           <label class="co-pay-opt">
             <input type="radio" name="payment" value="terminal">
-            <span class="co-pay-label">📱 Картой курьеру</span>
+            <span class="co-pay-label">Картой при получении</span>
           </label>
           <label class="co-pay-opt">
             <input type="radio" name="payment" value="cash">
-            <span class="co-pay-label">💵 Наличными</span>
+            <span class="co-pay-label">Наличными при получении</span>
           </label>
         </div>
         <div id="cash-change-block" style="display:none" class="co-field" style="margin-top:8px">
@@ -322,12 +311,8 @@ const checkout = {
   },
 
   setMode(m) {
-    this.mode = m;
-    document.querySelectorAll('.co-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === m));
-    document.getElementById('delivery-block').style.display = m === 'delivery' ? '' : 'none';
-    document.getElementById('pickup-block').style.display  = m === 'pickup'   ? '' : 'none';
-    const delivRow = document.getElementById('s-delivery-row');
-    if (delivRow) delivRow.style.display = m === 'delivery' ? '' : 'none';
+    // самовывоз убран — всегда доставка
+    this.mode = 'delivery';
     this._updateTotals();
   },
 
@@ -484,7 +469,6 @@ const checkout = {
   },
 
   _buildAddress() {
-    if (this.mode === 'pickup') return 'Самовывоз: г. Томск, ул. Учебная, 48';
     const street   = document.getElementById('f-street')?.value.trim()   || '';
     const house    = document.getElementById('f-house')?.value.trim()    || '';
     const apt      = document.getElementById('f-apt')?.value.trim()      || '';
@@ -797,7 +781,7 @@ const deliveryMap = {
         hint.style.display = '';
         hint.style.color = '#8b1a1a';
         hint.style.background = '#fff0f0';
-        hint.textContent = '✗ Адрес вне зоны доставки. Выберите другую точку или самовывоз.';
+        hint.textContent = '✗ Адрес вне зоны доставки. Укажите другой адрес.';
         checkout.deliveryPrice = 0;
       }
       checkout._updateTotals();

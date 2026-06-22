@@ -10,3 +10,9 @@ dist/
 venv/
 certbot/
 push.sh
+# исходники иконок в корне — рабочие копии лежат в app/static/img/
+/cart.svg
+/search.svg
+/vk_logo.svg
+/telegram_logo.svg
+/max_logo.svg

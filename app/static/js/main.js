@@ -3,20 +3,43 @@
 //  • ручной скролл → в баре подсвечивается текущая категория (scroll-spy)
 //  • поиск (debounce) фильтрует уже загруженные товары без перезагрузки
 
-const HEADER_OFFSET = 64;   // высота фиксированной шапки + небольшой зазор
+// высота «прилипшего» верха: шапка + (на мобилке) горизонтальная полоса категорий.
+// На десктопе сайдбар тоже sticky, но он СБОКУ (вертикальный) и в offset верха не
+// входит — учитываем полосу, только когда она реально горизонтальная сверху
+// (мобильный режим: видна кнопка поиска 🔍).
+function headerOffset() {
+  const header = document.querySelector('.header');
+  const bar = document.getElementById('cat-bar');
+  let h = header ? header.offsetHeight : 56;
+  const searchBtn = document.querySelector('.cat-search-btn');
+  const mobileBar = searchBtn && getComputedStyle(searchBtn).display !== 'none';
+  if (bar && mobileBar) h += bar.offsetHeight;
+  return h + 8;
+}
 
 // ── Навигация по категориям (якоря) ──────────────────────────────────────────
 const catItems = [...document.querySelectorAll('.cat-item')];
 const catSections = [...document.querySelectorAll('.cat-section')];
 
+let _activeSlug = null;
 function setActiveCat(slug) {
-  catItems.forEach(i => i.classList.toggle('active', i.dataset.slug === slug));
+  const changed = slug !== _activeSlug;
+  _activeSlug = slug;
+  catItems.forEach(i => {
+    const on = i.dataset.slug === slug;
+    i.classList.toggle('active', on);
+    // на мобилке подтягиваем активную пилюлю в видимую область полосы
+    // (только при смене категории, чтобы не дёргать при каждом тике скролла)
+    if (on && changed && getComputedStyle(i).flexShrink === '0') {
+      i.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  });
 }
 
 function scrollToCat(slug) {
   const sec = document.getElementById(`cat-${slug}`);
   if (!sec) return;
-  const y = sec.getBoundingClientRect().top + window.scrollY - HEADER_OFFSET;
+  const y = sec.getBoundingClientRect().top + window.scrollY - headerOffset();
   window.scrollTo({ top: y, behavior: 'smooth' });
 }
 
@@ -35,12 +58,18 @@ let spyTicking = false;
 function updateScrollSpy() {
   spyTicking = false;
   if (document.getElementById('search-results').style.display !== 'none') return;
-  const probe = window.scrollY + HEADER_OFFSET + 8;
+  // используем положение секции относительно вьюпорта (getBoundingClientRect) —
+  // не зависит от offsetParent, футера и sticky-сайдбара
+  const line = headerOffset() + 4;   // условная «линия» под шапкой
   let current = catSections[0];
   for (const sec of catSections) {
-    if (sec.offsetTop <= probe) current = sec;
+    if (sec.getBoundingClientRect().top <= line) current = sec;
     else break;
   }
+  // у дна страницы последняя секция может быть короче экрана и никогда не
+  // дойти до «линии» — подсвечиваем её принудительно
+  const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+  if (atBottom && catSections.length) current = catSections[catSections.length - 1];
   if (current) setActiveCat(current.dataset.slug);
 }
 window.addEventListener('scroll', () => {
@@ -52,23 +81,40 @@ window.addEventListener('DOMContentLoaded', () => {
   const initial = (typeof INITIAL_CATEGORY !== 'undefined' && INITIAL_CATEGORY) || '';
   if (initial && document.getElementById(`cat-${initial}`)) {
     setActiveCat(initial);
-    // без анимации при загрузке
+    // без анимации при загрузке (rect+scrollY — документ-относительная позиция)
     const sec = document.getElementById(`cat-${initial}`);
-    window.scrollTo({ top: sec.offsetTop - HEADER_OFFSET });
+    window.scrollTo({ top: sec.getBoundingClientRect().top + window.scrollY - headerOffset() });
   } else {
     updateScrollSpy();
   }
 });
 
 // ─── Поиск с debounce (фильтр по загруженным товарам) ────────────────────────
-const searchInput = document.getElementById('search-input');
 let searchTimer = null;
-
-if (searchInput) {
-  searchInput.addEventListener('input', () => {
+// две точки ввода: десктоп-шапка и мобильная полоса категорий — синхронизированы
+['search-input', 'search-input-mobile'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    const other = document.getElementById(id === 'search-input' ? 'search-input-mobile' : 'search-input');
+    if (other) other.value = el.value;
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => runSearch(searchInput.value.trim()), 300);
+    searchTimer = setTimeout(() => runSearch(el.value.trim()), 300);
   });
+});
+
+// мобильный тоггл поиска в полосе категорий
+function toggleMobileSearch(open) {
+  const bar = document.getElementById('cat-bar');
+  if (!bar) return;
+  bar.classList.toggle('searching', open);
+  if (open) {
+    const m = document.getElementById('search-input-mobile');
+    if (m) setTimeout(() => m.focus(), 50);
+  } else {
+    const m = document.getElementById('search-input-mobile');
+    if (m && m.value) { m.value = ''; runSearch(''); }
+  }
 }
 
 async function runSearch(q) {
@@ -418,6 +464,8 @@ document.addEventListener('wheel', (e) => {
       localStorage.setItem('vkusno_user', JSON.stringify(user));
       const lbl = document.getElementById('account-btn-label');
       if (lbl) lbl.textContent = user.name || user.phone;
+      const navName = document.getElementById('nav-profile-name');
+      if (navName) navName.textContent = user.name || user.phone;
     } else {
       localStorage.removeItem('vkusno_user');
     }
