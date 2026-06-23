@@ -23,7 +23,7 @@
     {% for c in categories %}
     <tr draggable="true" data-id="{{ c.id }}" data-order="{{ c.sort_order }}">
       <td style="cursor:grab;color:#bbb;text-align:center;font-size:18px;user-select:none">⠿</td>
-      <td style="font-size:20px">{% if c.show_icon %}{{ c.icon or '🍴' }}{% else %}<span style="color:#ccc;font-size:12px">— нет —</span>{% endif %}</td>
+      <td style="font-size:20px">{% if c.show_icon %}{% if c.icon and (c.icon.startswith('/media/') or c.icon.endswith('.svg')) %}<img src="{{ c.icon }}" style="width:24px;height:24px;object-fit:contain;vertical-align:middle">{% else %}{{ c.icon or '🍴' }}{% endif %}{% else %}<span style="color:#ccc;font-size:12px">— нет —</span>{% endif %}</td>
       <td><strong>{{ c.name }}</strong></td>
       <td style="color:#888;font-size:12px">{{ c.slug }}</td>
       <td style="color:#888">{{ c.sort_order }}</td>
@@ -88,10 +88,14 @@ function openModal(data) {
   document.getElementById('cm-id').value = data ? data.id : '';
   document.getElementById('cm-name').value = data ? data.name : '';
   document.getElementById('cm-slug').value = data ? data.slug : '';
-  document.getElementById('cm-icon').value = data ? (data.icon || '') : '';
-  const showIcon = data ? data.show_icon : true;
-  document.getElementById('cm-show-icon').checked = showIcon;
-  document.getElementById('cm-icon').disabled = !showIcon;
+  const icon = data ? (data.icon || '') : '';
+  document.getElementById('cm-icon').value = icon;
+  document.getElementById('cm-show-icon').checked = data ? data.show_icon : true;
+  // сброс файла + превью текущей загруженной иконки
+  document.getElementById('cm-icon-file').value = '';
+  const prev = document.getElementById('cm-icon-preview');
+  const isFile = icon && (icon.startsWith('/media/') || icon.toLowerCase().endsWith('.svg'));
+  prev.innerHTML = isFile ? `<img src="${icon}" style="width:32px;height:32px;object-fit:contain;border:1px solid #eee;border-radius:6px;padding:3px">` : '';
   document.getElementById('cm-order').value = data ? data.sort_order : 0;
   document.getElementById('cm-visible').checked = data ? data.is_visible : true;
   // автогенерация slug при создании
@@ -133,8 +137,18 @@ async function saveCat() {
   const url    = id ? `/admin/categories/${id}` : '/admin/categories';
   const method = id ? 'PUT' : 'POST';
   const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  if (res.ok) location.reload();
-  else alert('Ошибка: ' + (await res.json()).detail);
+  if (!res.ok) { alert('Ошибка: ' + (await res.json()).detail); return; }
+
+  // если выбран SVG-файл — загружаем его к категории
+  const fileInput = document.getElementById('cm-icon-file');
+  const catId = id || (await res.json()).id;
+  if (fileInput.files.length && catId) {
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    const up = await fetch(`/admin/categories/${catId}/icon`, { method: 'POST', body: fd });
+    if (!up.ok) { alert('Иконка: ' + (await up.json()).detail); return; }
+  }
+  location.reload();
 }
 
 async function deleteCat(id, name) {
@@ -156,13 +170,18 @@ async function deleteCat(id, name) {
           <input id="cm-name">
         </div>
         <div class="adm-field">
-          <label>Иконка (эмодзи)</label>
-          <input id="cm-icon" placeholder="🍱" maxlength="10">
+          <label>Иконка (эмодзи или путь)</label>
+          <input id="cm-icon" placeholder="🍱 или /media/...">
           <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px;font-weight:400;font-size:13px">
-            <input type="checkbox" id="cm-show-icon" checked style="width:auto" onchange="document.getElementById('cm-icon').disabled = !this.checked">
-            Показывать эмодзи
+            <input type="checkbox" id="cm-show-icon" checked style="width:auto">
+            Показывать иконку
           </label>
         </div>
+      </div>
+      <div class="adm-field">
+        <label>SVG-иконка <span style="color:#aaa;font-weight:400">— загрузить файл (перекроет эмодзи)</span></label>
+        <input type="file" id="cm-icon-file" accept=".svg,image/svg+xml">
+        <div id="cm-icon-preview" style="margin-top:6px"></div>
       </div>
       <div class="adm-field">
         <label>Slug * <span style="color:#aaa;font-weight:400">— url-адрес (/category/slug)</span></label>

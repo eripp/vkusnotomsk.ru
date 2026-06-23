@@ -246,6 +246,31 @@ async def admin_category_update(cat_id: int, payload: CategoryIn, db: AsyncSessi
     return {"ok": True}
 
 
+@router.post("/categories/{cat_id}/icon")
+async def admin_category_icon(cat_id: int, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """Загрузка SVG-иконки категории. Файл кладётся в media/, путь пишется в icon."""
+    res = await db.execute(select(Category).where(Category.id == cat_id))
+    c = res.scalar_one_or_none()
+    if not c:
+        raise HTTPException(status_code=404)
+
+    name = (file.filename or "").lower()
+    content = await file.read()
+    is_svg = name.endswith(".svg") or b"<svg" in content[:512].lower()
+    if not is_svg:
+        raise HTTPException(status_code=400, detail="Загрузите файл в формате SVG")
+    if len(content) > 256 * 1024:
+        raise HTTPException(status_code=400, detail="Файл слишком большой (макс. 256 КБ)")
+
+    os.makedirs(MEDIA_DIR, exist_ok=True)
+    fname = f"cat_{cat_id}_{uuid.uuid4().hex[:8]}.svg"
+    with open(os.path.join(MEDIA_DIR, fname), "wb") as f:
+        f.write(content)
+    c.icon = f"/media/{fname}"
+    await db.commit()
+    return {"ok": True, "icon": c.icon}
+
+
 @router.post("/categories/reorder")
 async def admin_categories_reorder(request: Request, db: AsyncSession = Depends(get_db)):
     """Принимает [{id, sort_order}, ...] и обновляет порядок."""

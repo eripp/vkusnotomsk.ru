@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates  # noqa: F401
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func
 from app.database import get_db
-from app.models import Category, Product, ProductGroup, ProductImage
+from app.models import Category, Product, ProductGroup, ProductImage, DeliveryZone
 from app.routers.stories import get_active_stories
 from app.templates_env import templates
 
@@ -238,6 +238,14 @@ def _group_by_category(categories, products: list[dict]) -> list[dict]:
     return groups
 
 
+async def _free_delivery_from(db: AsyncSession):
+    """Минимальный порог бесплатной доставки среди активных зон (для плашки)."""
+    return (await db.execute(
+        select(func.min(DeliveryZone.free_delivery_from))
+        .where(DeliveryZone.is_active == True, DeliveryZone.free_delivery_from != None)
+    )).scalar()
+
+
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: AsyncSession = Depends(get_db)):
     categories = await _get_categories(db)
@@ -251,6 +259,7 @@ async def index(request: Request, db: AsyncSession = Depends(get_db)):
         "active_category": None,
         "stories": stories,
         "stories_json": stories,
+        "free_delivery_from": await _free_delivery_from(db),
     })
 
 
@@ -288,6 +297,7 @@ async def category_page(request: Request, slug: str, db: AsyncSession = Depends(
         "meta_desc": f"Заказать {cat_name.lower()} с доставкой по Томску. Быстро, вкусно, горячо!",
         "stories": stories,
         "stories_json": stories,
+        "free_delivery_from": await _free_delivery_from(db),
     })
 
 
@@ -316,6 +326,7 @@ async def product_page(request: Request, slug: str, db: AsyncSession = Depends(g
         "meta_desc": meta_desc,
         "stories": stories,
         "stories_json": stories,
+        "free_delivery_from": await _free_delivery_from(db),
     })
 
 

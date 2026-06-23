@@ -27,8 +27,6 @@ from app.templates_env import templates
 router = APIRouter(tags=["orders"])
 pages_router = APIRouter(tags=["pages"])
 
-MIN_ORDER_SUM = 500  # рублей
-
 
 # ─── Схемы ────────────────────────────────────────────────────────────────────
 
@@ -160,11 +158,7 @@ async def create_order(
             "line_total": line_total,
         })
 
-    if subtotal < MIN_ORDER_SUM:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Минимальная сумма заказа {MIN_ORDER_SUM} ₽, у вас {subtotal} ₽",
-        )
+    # минимальная сумма заказа проверяется ниже — с учётом зоны (для доставки)
 
     # промокод
     promo_obj: Optional[Promocode] = None
@@ -201,6 +195,9 @@ async def create_order(
         if not zone:
             raise HTTPException(status_code=400, detail="Адрес вне зоны доставки")
         zone_id = zone.id
+        # минимальная сумма заказа — только из зоны (если задана)
+        if zone.min_order_sum and subtotal < zone.min_order_sum:
+            raise HTTPException(status_code=400, detail=f"Минимальная сумма заказа {zone.min_order_sum} ₽, у вас {subtotal} ₽")
         free_from = zone.free_delivery_from
         if free_from is not None and subtotal >= free_from:
             delivery_price = 0

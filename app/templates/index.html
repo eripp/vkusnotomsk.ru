@@ -75,17 +75,27 @@
     <nav class="cat-nav">
       {% if popular %}
       <a href="#cat-popular" class="cat-item" data-slug="popular">
-        <span class="cat-icon">⭐</span> Часто заказывают
+        <span class="cat-icon"><svg class="cat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l2.3 4.7 5.2.8-3.8 3.7.9 5.1L12 16.9 7.4 18.3l.9-5.1L4.5 9.5l5.2-.8z"/></svg></span> Часто заказывают
       </a>
       {% endif %}
       {% for cat in categories %}
       <a href="#cat-{{ cat.slug }}"
          class="cat-item {% if active_category == cat.slug %}active{% endif %}"
          data-slug="{{ cat.slug }}">
-        {% if cat.show_icon %}<span class="cat-icon">{{ cat.icon or '🍴' }}</span> {% endif %}{{ cat.name }}
+        <span class="cat-icon">{{ cat_icon(cat.name, cat.slug, cat.icon) }}</span> {{ cat.name }}
       </a>
       {% endfor %}
     </nav>
+
+    {% if free_delivery_from %}
+    <a href="/delivery" class="free-deliv-card">
+      <div class="free-deliv-text">
+        <div class="free-deliv-title">Бесплатная доставка</div>
+        <div class="free-deliv-sub">при заказе от {{ free_delivery_from }} ₽</div>
+      </div>
+      <span class="free-deliv-arrow">→</span>
+    </a>
+    {% endif %}
   </aside>
 
   <!-- Контент -->

@@ -188,13 +188,14 @@
 
 {% block scripts %}
 <script>
-const MIN_ORDER = 500;
+const MIN_ORDER = 0;   // глобального минимума нет — минимум задаётся в зоне
 
 const checkout = {
   mode: 'delivery',
   deliveryPrice: 0,      // базовая цена доставки зоны
   freeFrom: null,        // порог бесплатной доставки (₽), null = нет
   inZone: null,          // null — адрес не определён, true/false — в зоне/вне зоны
+  zoneMin: null,         // мин. сумма заказа выбранной зоны (₽), null = нет
   slots: [],
   _promoCode: null,
   _promoDiscount: 0,
@@ -352,6 +353,11 @@ const checkout = {
     this._updateTotals();
   },
 
+  // минимальная сумма заказа: из зоны, если выбрана, иначе глобальная
+  _minOrder() {
+    return (this.zoneMin != null) ? this.zoneMin : MIN_ORDER;
+  },
+
   // фактическая цена доставки с учётом порога бесплатной доставки
   _effectiveDelivery() {
     if (this.mode !== 'delivery') return 0;
@@ -398,9 +404,10 @@ const checkout = {
 
     const warn = document.getElementById('s-min-warn');
     if (warn) {
-      if (subtotal < MIN_ORDER) {
+      const min = this._minOrder();
+      if (subtotal < min) {
         warn.style.display = '';
-        warn.textContent = `Минимальная сумма заказа ${MIN_ORDER} ₽. Не хватает ${MIN_ORDER - subtotal} ₽`;
+        warn.textContent = `Минимальная сумма заказа ${min} ₽. Не хватает ${min - subtotal} ₽`;
       } else {
         warn.style.display = 'none';
       }
@@ -503,7 +510,7 @@ const checkout = {
     }
     if (!document.getElementById('f-date')?.value)  errs.push('Выберите дату');
     if (!document.getElementById('f-slot')?.value)  errs.push('Выберите время доставки');
-    if (cart.total < MIN_ORDER) errs.push(`Минимальная сумма заказа ${MIN_ORDER} ₽`);
+    if (cart.total < this._minOrder()) errs.push(`Минимальная сумма заказа ${this._minOrder()} ₽`);
     if (!cart.items.length)    errs.push('Корзина пуста');
     return errs;
   },
@@ -791,6 +798,7 @@ const deliveryMap = {
           (free ? ` (бесплатно от ${free} ₽)` : '');
         checkout.deliveryPrice = dp;
         checkout.freeFrom = free || null;
+        checkout.zoneMin = data.min_order_sum != null ? data.min_order_sum : null;
         checkout.inZone = true;
       } else {
         hint.style.display = '';
@@ -799,6 +807,7 @@ const deliveryMap = {
         hint.textContent = '✗ Адрес вне зоны доставки. Укажите другой адрес.';
         checkout.deliveryPrice = 0;
         checkout.freeFrom = null;
+        checkout.zoneMin = null;
         checkout.inZone = false;
       }
       checkout._updateTotals();
