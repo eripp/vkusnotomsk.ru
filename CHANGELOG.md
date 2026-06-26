@@ -6,6 +6,71 @@
 
 ## [Unreleased]
 
+### 2026-06-26 — Подтверждение входа через i-dgtl (SMS / Telegram Gateway)
+
+#### Added
+- **Интеграция i-dgtl** (`app/services/idgtl.py`): провайдер сам генерирует, шлёт
+  и проверяет код. `idgtl_send(phone, channel)→uuid`, `idgtl_check(uuid, code)→status`
+  (CONFIRMED/WRONG_CODE/EXPIRED/NOT_FOUND). Каналы `sms`→SMS, `tg`→TELEGRAM_GATEWAY.
+- **Колонка `otp_codes.provider_uuid`** (миграция `0006`) — храним uuid сессии
+  верификации провайдера; для таких кодов `code_hash` пустой.
+- **Админ-карточка i-dgtl**: `idgtl_api_key` + `idgtl_gateway_id` (DB-override).
+- Конфиг `IDGTL_API_KEY`, `IDGTL_GATEWAY_ID`.
+- В форме входа канал **Telegram** снова активен (доставка через i-dgtl).
+
+#### Changed
+- `send-otp`/`verify-otp` — гибрид: при настроенном i-dgtl каналы SMS/Telegram идут
+  через провайдера (свой код не генерируем); иначе — запасная схема (SMS.RU / показ
+  кода на экране). MAX/VK остаются неактивными заглушками.
+
+### 2026-06-26 — Выбор канала подтверждения входа (Telegram / MAX / VK)
+
+#### Added
+- **Форма выбора канала** доставки кода на экране входа (модалка `base.html`
+  и auth-wall `account.html`): три кнопки с SVG-логотипами — Telegram, MAX, VK;
+  Telegram выбран по умолчанию. Стили `.auth-channels` / `.auth-channel`.
+- Значение `vk` в enum `OtpChannel` + миграция `0005_otp_vk`.
+
+#### Changed
+- `send_otp_code` теперь возвращает `bool` (доставлен ли код). `tg` → Telegram
+  Gateway (рабочий), `sms` → SMS.RU, `max`/`vk` → заглушки (код не отправляется).
+- `send-otp` показывает `dev_code` на экране, если доставка не состоялась
+  (заглушка MAX/VK или канал без баланса/настройки) — раньше решалось эвристикой
+  по наличию ключей в `.env`. Канал по умолчанию — `tg`.
+
+#### Notes
+- MAX и VK — пока заглушки: мессенджеры не умеют слать «холодный» код по номеру
+  (нужна привязка бота). Реальная доставка по номеру — Telegram Gateway или SMS.RU,
+  оба требуют пополненного баланса/настроенного отправителя.
+
+### 2026-06-25 — Вход по SMS-коду (SMS.RU), флаг подтверждения телефона
+
+#### Added
+- **SMS-канал OTP через SMS.RU** (`send_sms_ru` в `app/services/notifications.py`):
+  реальный контракт `GET https://sms.ru/sms/send` (`api_id`, `to` без «+», `msg`,
+  `json=1`, опционально `test=1`), разбор верхнеуровневого и по-номерного
+  `status_code`. Новый член enum `OtpChannel.sms`. Это единственный канал,
+  доставляющий код по номеру телефона.
+- **Карточка «SMS.RU» в админ/настройки**: `smsru_api_id` (DB-override над `.env`)
+  и чекбокс `smsru_test` (тестовый режим без отправки/списания).
+- **Колонки `users.phone_verified` / `phone_verified_via`** + миграция
+  `0004_phone_verified` (плюс значение `sms` в enum `otpchannel`). На успешном
+  `verify-otp` телефон помечается подтверждённым с указанием канала.
+- **Антифлуд на `send-otp`**: серверный cooldown 60с на повторную выдачу кода
+  одному номеру (HTTP 429).
+- Конфиг `SMSRU_API_ID`.
+
+#### Changed
+- Канал по умолчанию для входа — `sms` (модалка и кабинет ранее слали `tg`/`max`).
+- `send_max` приведён к реальному контракту MAX Bot API
+  (`https://platform-api2.max.ru/messages?user_id=…`, заголовок `Authorization`
+  без `Bearer`); адресация по `max_user_id`, не по телефону. Уведомления MAX
+  теперь шлются только привязанным юзерам (`user.max_user_id`).
+
+#### Notes
+- MAX/VK/Telegram-бот **не умеют** слать «холодный» код по номеру (анти-спам
+  платформ) — для входа по коду пригоден только SMS-шлюз или Telegram Gateway.
+
 ### 2026-06-23 — Редизайн каталога, зоны, иконки, мелкие фиксы
 
 #### Added

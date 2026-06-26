@@ -180,6 +180,87 @@
     </div>
   </div>
 
+  <!-- ЮKassa -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">ЮKassa — приём онлайн-оплаты</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>shopId <span style="color:#aaa;font-weight:400">— yookassa_shop_id (идентификатор магазина)</span></label>
+        <input name="yookassa_shop_id" value="{{ val('yookassa_shop_id') }}" placeholder="123456" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>Секретный ключ <span style="color:#aaa;font-weight:400">— yookassa_secret (live_… или test_…)</span></label>
+        <input name="yookassa_secret" value="{{ val('yookassa_secret') }}" placeholder="live_…" autocomplete="off" style="font-family:monospace">
+      </div>
+      <p class="adm-hint" style="color:#888;font-size:12px;margin:4px 0 0">
+        URL для уведомлений (webhook) в личном кабинете ЮKassa:
+        <code>{{ val('site_url') or 'https://ваш-домен' }}/api/payment/callback</code>.
+        Пустые поля — берётся значение из .env.
+      </p>
+    </div>
+  </div>
+
+  <!-- i-dgtl — верификация телефона (SMS / Telegram Gateway) -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">i-dgtl — подтверждение входа (основной)</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Ключ <span style="color:#aaa;font-weight:400">— idgtl_api_key (Authorization: Basic, из ЛК direct.i-dgtl.ru)</span></label>
+        <input name="idgtl_api_key" value="{{ val('idgtl_api_key') }}" placeholder="ключ модуля верификации" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>gatewayId <span style="color:#aaa;font-weight:400">— idgtl_gateway_id (ID модуля подтверждения)</span></label>
+        <input name="idgtl_gateway_id" value="{{ val('idgtl_gateway_id') }}" placeholder="напр. jRUOLE" autocomplete="off" style="font-family:monospace">
+      </div>
+      <p class="adm-hint" style="color:#888;font-size:12px;margin:4px 0 0">
+        Провайдер сам генерирует, отправляет (SMS / Telegram) и проверяет код входа.
+        Когда заполнено — каналы SMS и Telegram идут через i-dgtl. Пустые поля — берётся из .env;
+        если не задано нигде, используется запасная схема (SMS.RU / показ кода на экране).
+      </p>
+    </div>
+  </div>
+
+  <!-- Яндекс SmartCaptcha — антибот на входе -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Яндекс SmartCaptcha — защита входа от ботов</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Клиентский ключ <span style="color:#aaa;font-weight:400">— smartcaptcha_sitekey (для виджета на странице)</span></label>
+        <input name="smartcaptcha_sitekey" value="{{ val('smartcaptcha_sitekey') }}" placeholder="ysc1_…" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>Серверный ключ <span style="color:#aaa;font-weight:400">— smartcaptcha_secret (для проверки токена)</span></label>
+        <input name="smartcaptcha_secret" value="{{ val('smartcaptcha_secret') }}" placeholder="ysc2_…" autocomplete="off" style="font-family:monospace">
+      </div>
+      <p class="adm-hint" style="color:#888;font-size:12px;margin:4px 0 0">
+        Капча проверяется перед отправкой кода. Оба поля пустые — капча отключена.
+        Получить ключи: Yandex Cloud → SmartCaptcha.
+      </p>
+    </div>
+  </div>
+
+  <!-- SMS.RU — резервная отправка кода по SMS -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">SMS.RU — резервная отправка кода (если i-dgtl не задан)</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>api_id <span style="color:#aaa;font-weight:400">— smsru_api_id (личный кабинет sms.ru → Настройки → API)</span></label>
+        <input name="smsru_api_id" value="{{ val('smsru_api_id') }}" placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" name="smsru_test" value="1" {% if val('smsru_test') in ('1','true','on','yes') %}checked{% endif %}>
+          Тестовый режим (test=1 — SMS не отправляется и баланс не списывается)
+        </label>
+      </div>
+      <p class="adm-hint" style="color:#888;font-size:12px;margin:4px 0 0">
+        Код входа отправляется по SMS на номер пользователя. Пустой api_id — берётся из .env;
+        если не задан нигде, код возвращается на экран (dev-режим). Мессенджеры (MAX/Telegram-бот)
+        не умеют слать код по номеру — только SMS или Telegram Gateway.
+      </p>
+    </div>
+  </div>
+
   <!-- Dadata (адреса и геокодинг) -->
   <div class="adm-card" style="margin-bottom:1rem">
     <div class="adm-card-title">Dadata — адреса и геокодинг</div>

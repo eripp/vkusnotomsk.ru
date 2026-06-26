@@ -32,17 +32,86 @@ _PAYMENT_LABELS = {
 
 # ─── OTP ──────────────────────────────────────────────────────────────────────
 
-async def send_otp_code(phone: str, code: str, channel: OtpChannel) -> None:
+async def send_otp_code(phone: str, code: str, channel: OtpChannel) -> bool:
+    """Доставляет код по выбранному каналу. Возвращает True, если код реально
+    отправлен; False — для каналов-заглушек (MAX/VK) или при неудаче доставки.
+    Для заглушек код показывается пользователю на экране (dev_code)."""
     text = f"Ваш код подтверждения Вкусно: {code}"
+
     if channel == OtpChannel.tg:
-        logger.info("[OTP/TG] phone=%s code=%s", phone, code)
+        logger.info("[OTP/TG] phone=%s", phone)
         # 1) Telegram Gateway (по номеру, без бота) — если настроен;
         # 2) иначе бот по сохранённому chat_id.
-        if not await send_telegram_gateway(phone, code):
-            await _send_tg_by_phone(phone, text)
-    else:
-        logger.info("[OTP/MAX] phone=%s code=%s", phone, code)
-        await send_max(phone, text)
+        if await send_telegram_gateway(phone, code):
+            return True
+        await _send_tg_by_phone(phone, text)
+        return False
+
+    if channel == OtpChannel.sms:
+        logger.info("[OTP/SMS] phone=%s", phone)
+        return await send_sms_ru(phone, text)
+
+    # MAX / VK — заглушки: мессенджеры не умеют слать «холодный» код по номеру,
+    # поэтому код не отправляется, а показывается на экране входа (dev_code).
+    logger.info("[OTP/%s-stub] phone=%s code=%s", channel.value, phone, code)
+    return False
+
+
+async def send_sms_ru(phone: str, text: str) -> bool:
+    """Отправка SMS через SMS.RU (https://sms.ru/sms/send).
+    api_id — из настроек админки (приоритет), иначе из .env.
+    Номер передаём без «+». Возвращает True, если SMS.RU принял сообщение
+    (status_code == 100). При test-режиме сообщение не отправляется и баланс
+    не списывается, но ответ имитирует успех."""
+    from app.config import settings
+
+    api_id = settings.SMSRU_API_ID
+    test_mode = False
+    try:
+        from app.services.settings import get_site_settings
+        from app.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            cfg = await get_site_settings(db)
+        api_id = (cfg.get("smsru_api_id") or "").strip() or api_id
+        test_mode = (cfg.get("smsru_test") or "") in ("1", "true", "on", "yes")
+    except Exception as exc:
+        logger.warning("[SMS.RU] не удалось прочитать настройки: %s", exc)
+
+    if not api_id:
+        logger.warning("[SMS.RU] нет api_id → %s: %s", phone, text)
+        return False
+
+    to = phone.lstrip("+")   # SMS.RU ждёт номер без «+», напр. 79991234567
+    params = {"api_id": api_id, "to": to, "msg": text, "json": 1}
+    if test_mode:
+        params["test"] = 1
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get("https://sms.ru/sms/send", params=params)
+            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception as exc:
+        logger.error("[SMS.RU] исключение: %s", exc)
+        return False
+
+    # Верхнеуровневый status_code: 100 — запрос принят. Иначе — ошибка авторизации/баланса.
+    top = data.get("status_code")
+    if top != 100:
+        logger.warning("[SMS.RU] отказ status=%s code=%s text=%s",
+                       data.get("status"), top, data.get("status_text"))
+        return False
+
+    # Статус по конкретному номеру.
+    sms = (data.get("sms") or {}).get(to) or {}
+    if sms.get("status_code") == 100:
+        logger.info("[SMS.RU] отправлено %s (sms_id=%s, balance=%s)",
+                    to, sms.get("sms_id"), data.get("balance"))
+        return True
+
+    logger.warning("[SMS.RU] номер %s не принят: code=%s text=%s",
+                   to, sms.get("status_code"), sms.get("status_text"))
+    return False
 
 
 # ─── Публичные функции уведомлений ────────────────────────────────────────────
@@ -95,8 +164,8 @@ async def notify_order_canceled(db: AsyncSession, order: Order, reason: str = ""
     if reason:
         text += f" Причина: {reason}"
 
-    if ns.max_orders:
-        await send_max(user.phone, text)
+    if ns.max_orders and user.max_user_id:
+        await send_max(user.max_user_id, text)
     if ns.tg_orders and user.tg_chat_id:
         await send_telegram(user.tg_chat_id, text)
     if ns.email_orders and user.email:
@@ -139,24 +208,36 @@ async def send_email(to: str, subject: str, html: str) -> None:
         logger.error("[EMAIL] ошибка: %s", exc)
 
 
-async def send_max(phone: str, text: str) -> None:
+async def send_max(max_user_id: str | int, text: str) -> None:
+    """Отправка сообщения через MAX Bot API.
+
+    ВАЖНО: MAX НЕ умеет слать сообщение по номеру телефона — только по
+    внутреннему user_id, который становится известен лишь после того, как
+    пользователь сам написал боту (событие bot_started). Поэтому MAX пригоден
+    для уведомлений уже привязанному юзеру, но НЕ для OTP по номеру.
+    Реальный контракт (dev.max.ru): POST https://platform-api2.max.ru/messages
+    ?user_id=<id>, заголовок Authorization: <token> (без Bearer)."""
     from app.config import settings
     if not settings.MAX_API_KEY:
-        logger.warning("[MAX] нет ключа → %s: %s", phone, text)
+        logger.warning("[MAX] нет ключа → user_id=%s: %s", max_user_id, text)
+        return
+    if not max_user_id:
+        logger.warning("[MAX] нет user_id, отправка невозможна")
         return
 
     try:
         import httpx
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
-                "https://api.max.ru/v1/messages",
-                headers={"Authorization": f"Bearer {settings.MAX_API_KEY}"},
-                json={"phone": phone, "text": text},
+                "https://platform-api2.max.ru/messages",
+                params={"user_id": max_user_id},
+                headers={"Authorization": settings.MAX_API_KEY},
+                json={"text": text},
             )
             if resp.status_code >= 400:
                 logger.warning("[MAX] ошибка %s: %s", resp.status_code, resp.text)
             else:
-                logger.info("[MAX] отправлено %s", phone)
+                logger.info("[MAX] отправлено user_id=%s", max_user_id)
     except Exception as exc:
         logger.error("[MAX] исключение: %s", exc)
 
@@ -237,8 +318,8 @@ async def _notify_user(
     subject: str,
     sms_text: str,
 ) -> None:
-    if ns.max_orders:
-        await send_max(user.phone, sms_text)
+    if ns.max_orders and user.max_user_id:
+        await send_max(user.max_user_id, sms_text)
     if ns.tg_orders and user.tg_chat_id:
         await send_telegram(user.tg_chat_id, sms_text)
     if ns.email_orders and user.email:

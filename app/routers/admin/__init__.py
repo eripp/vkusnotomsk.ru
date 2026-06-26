@@ -992,7 +992,7 @@ async def admin_schedule_preview(db: AsyncSession = Depends(get_db)):
 
 # ─── Settings ─────────────────────────────────────────────────────────────────
 
-_CHECKBOX_KEYS = {"metrika_webvisor", "metrika_ecom"}
+_CHECKBOX_KEYS = {"metrika_webvisor", "metrika_ecom", "smsru_test"}
 
 
 @router.get("/settings", response_class=HTMLResponse)

@@ -22,8 +22,25 @@
       <label>Телефон</label>
       <input id="aw2-phone" type="tel" placeholder="+7 (999) 000-00-00" autocomplete="tel">
     </div>
+    <p class="co-hint auth-channel-hint">Куда отправить код:</p>
+    <div class="auth-channels" id="aw2-channels">
+      <button type="button" class="auth-channel active" data-channel="sms" onclick="acctAuth.pickChannel('sms')">
+        <img src="/static/img/sms_logo.svg" alt="" class="auth-channel-ico"><span>SMS</span>
+      </button>
+      <button type="button" class="auth-channel" data-channel="tg" onclick="acctAuth.pickChannel('tg')">
+        <img src="/static/img/telegram_logo.svg" alt="" class="auth-channel-ico"><span>Telegram</span>
+      </button>
+      <button type="button" class="auth-channel" data-channel="max" disabled aria-disabled="true">
+        <img src="/static/img/max_logo.svg" alt="" class="auth-channel-ico"><span>MAX</span>
+      </button>
+      <button type="button" class="auth-channel" data-channel="vk" disabled aria-disabled="true">
+        <img src="/static/img/vk_logo.svg" alt="" class="auth-channel-ico"><span>VK</span>
+      </button>
+    </div>
+    <div id="aw2-captcha" style="display:none"></div>
     <button class="btn-primary" onclick="acctAuth.sendOtp()">Получить код</button>
     <div id="aw2-otp-block" style="display:none;margin-top:12px">
+      <div id="aw2-dev-code" class="auth-dev" style="display:none"></div>
       <div class="co-field">
         <label>Код из сообщения</label>
         <input id="aw2-code" type="text" placeholder="0000" maxlength="6" inputmode="numeric">
@@ -326,6 +343,49 @@ const acct = {
 // ─── Auth wall для /account ───────────────────────────────────────────────────
 const acctAuth = {
   _timer: null,
+  channel: 'sms',
+  _capWidgetId: null, _capSitekey: null, _capResolve: null,
+
+  pickChannel(ch) {
+    this.channel = ch;
+    document.querySelectorAll('#aw2-channels .auth-channel').forEach(b => {
+      b.classList.toggle('active', b.dataset.channel === ch);
+    });
+  },
+
+  async _ensureCaptcha() {
+    if (this._capSitekey === null) {
+      try {
+        const r = await fetch('/api/auth/captcha-sitekey');
+        this._capSitekey = (await r.json()).sitekey || '';
+      } catch { this._capSitekey = ''; }
+    }
+    if (!this._capSitekey) return false;
+    if (this._capWidgetId !== null) return true;
+    if (!window.smartCaptcha) {
+      await new Promise((res) => {
+        const s = document.createElement('script');
+        s.src = 'https://smartcaptcha.cloud.yandex.ru/captcha.js';
+        s.onload = res; s.onerror = res;
+        document.head.appendChild(s);
+      });
+    }
+    if (!window.smartCaptcha) return false;
+    this._capWidgetId = window.smartCaptcha.render('aw2-captcha', {
+      sitekey: this._capSitekey, invisible: true, hideShield: true,
+      callback: (t) => { if (this._capResolve) { this._capResolve(t); this._capResolve = null; } },
+    });
+    return true;
+  },
+
+  async _captchaToken() {
+    const on = await this._ensureCaptcha();
+    if (!on) return '';
+    return new Promise((resolve) => {
+      this._capResolve = resolve;
+      window.smartCaptcha.execute(this._capWidgetId);
+    });
+  },
 
   async sendOtp() {
     const phone  = document.getElementById('aw2-phone')?.value.trim();
@@ -337,13 +397,23 @@ const acctAuth = {
     btn.disabled = true; btn.textContent = 'Отправляем…';
 
     try {
+      const captcha_token = await this._captchaToken();
       const res = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, channel: 'max' }),
+        body: JSON.stringify({ phone, channel: this.channel, captcha_token }),
       });
-      if (!res.ok) throw new Error((await res.json()).detail);
+      if (this._capWidgetId !== null) window.smartCaptcha.reset(this._capWidgetId);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail);
       document.getElementById('aw2-otp-block').style.display = '';
+      const dev = document.getElementById('aw2-dev-code');
+      if (data.dev_code) {
+        dev.style.display = '';
+        dev.innerHTML = `Код не доставлен на телефон — ваш код: <b>${data.dev_code}</b>`;
+      } else {
+        dev.style.display = 'none';
+      }
       let cd = 60;
       this._timer = setInterval(() => {
         cd--;

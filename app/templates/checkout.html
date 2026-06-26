@@ -320,7 +320,11 @@ const checkout = {
   },
 
   _prefillUser() {
-    const u = _getUser();
+    // залогинен → данные профиля; гость → сохранённые локально контакты
+    let u = _getUser();
+    if (!u) {
+      try { u = JSON.parse(localStorage.getItem('vkusno_guest') || 'null'); } catch { u = null; }
+    }
     if (!u) return;
     const ph = document.getElementById('f-phone');
     if (ph && u.phone) ph.value = u.phone;
@@ -490,7 +494,8 @@ const checkout = {
     const apt      = document.getElementById('f-apt')?.value.trim()      || '';
     const floor    = document.getElementById('f-floor')?.value.trim()    || '';
     const entrance = document.getElementById('f-entrance')?.value.trim() || '';
-    const parts = [`ул. ${street}`, `д. ${house}`];
+    // улица уже приходит из Dadata с типом (ул/пр-кт/пер) — префикс не добавляем
+    const parts = [street, `д. ${house}`];
     if (apt)      parts.push(`кв. ${apt}`);
     if (floor)    parts.push(`этаж ${floor}`);
     if (entrance) parts.push(`подъезд ${entrance}`);
@@ -554,9 +559,16 @@ const checkout = {
     const m = slotText.match(/(\d{2}:\d{2})\s*[–-]\s*(\d{2}:\d{2})/);
     if (m) { slotStart = m[1]; slotEnd = m[2]; }
 
+    const _name  = document.getElementById('f-name').value.trim();
+    const _phone = document.getElementById('f-phone').value.trim();
+    // гость — запоминаем контакты локально для следующего раза
+    if (!_getUser()) {
+      try { localStorage.setItem('vkusno_guest', JSON.stringify({ name: _name, phone: _phone })); } catch {}
+    }
+
     const body = {
-      name:            document.getElementById('f-name').value.trim(),
-      phone:           document.getElementById('f-phone').value.trim(),
+      name:            _name,
+      phone:           _phone,
       address:         this._buildAddress(),
       lat:             deliveryMap._lat,
       lon:             deliveryMap._lon,
@@ -589,11 +601,11 @@ const checkout = {
       if (!res.ok) throw new Error(data.detail || 'Ошибка сервера');
 
       if (data.payment_url) {
-        // онлайн-оплата — редирект на YooKassa
-        cart._save([]);
+        // онлайн-оплата — редирект на YooKassa. Корзину НЕ чистим: заказ
+        // создастся только после оплаты (очистим на странице успеха).
         window.location.href = data.payment_url;
       } else {
-        // наличные / терминал — страница подтверждения
+        // наличные / терминал — заказ уже создан
         cart._save([]);
         window.location.href = `/order/${data.order_id}`;
       }
@@ -732,6 +744,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch { /* не авторизован — оформляем как гость */ }
   checkout.init();
   deliveryMap.init();
+});
+
+// При возврате «назад» из YooKassa страница берётся из bfcache и кнопка
+// остаётся в состоянии «Отправляем…» — сбрасываем её.
+window.addEventListener('pageshow', () => {
+  const btn = document.getElementById('submit-btn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Оформить заказ'; }
 });
 
 // ─── Карта Leaflet ────────────────────────────────────────────────────────────

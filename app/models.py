@@ -34,8 +34,10 @@ class PaymentMethod(str, enum.Enum):
 
 
 class OtpChannel(str, enum.Enum):
-    max = "max"
-    tg = "tg"
+    max = "max"   # заглушка (мессенджер не шлёт код по номеру) — код показывается на экране
+    tg = "tg"     # Telegram Gateway — рабочая доставка кода по номеру
+    sms = "sms"   # SMS.RU — доставка по номеру (требует подключённого отправителя)
+    vk = "vk"     # заглушка — код показывается на экране
 
 
 class PromoType(str, enum.Enum):
@@ -154,6 +156,8 @@ class User(Base):
     email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     tg_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     max_user_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    phone_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    phone_verified_via: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -171,7 +175,10 @@ class OtpCode(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     phone: Mapped[str] = mapped_column(String(20), index=True)
-    code_hash: Mapped[str] = mapped_column(String(200))
+    code_hash: Mapped[str] = mapped_column(String(200), default="")
+    # Для кодов, которыми управляет внешний провайдер (i-dgtl): сам код мы не
+    # генерируем и не храним — храним только uuid сессии верификации провайдера.
+    provider_uuid: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     channel: Mapped[OtpChannel] = mapped_column(Enum(OtpChannel))
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
@@ -243,6 +250,19 @@ class OrderItem(Base):
 
     order: Mapped["Order"] = relationship("Order", back_populates="items")
     product: Mapped["Product"] = relationship("Product", back_populates="order_items")
+
+
+class PendingOrder(Base):
+    """Черновик онлайн-заказа: создаётся при оформлении с оплатой YooKassa,
+    превращается в Order только после успешной оплаты (webhook). Если оплата не
+    пришла — остаётся «висеть» и не засоряет реальные заказы."""
+    __tablename__ = "pending_orders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON)               # все данные будущего заказа
+    yookassa_payment_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    order_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # id после материализации
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 # ─── Promo & Cashback ─────────────────────────────────────────────────────────

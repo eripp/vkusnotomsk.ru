@@ -82,7 +82,7 @@
       <a href="#cat-{{ cat.slug }}"
          class="cat-item {% if active_category == cat.slug %}active{% endif %}"
          data-slug="{{ cat.slug }}">
-        <span class="cat-icon">{{ cat_icon(cat.name, cat.slug, cat.icon) }}</span> {{ cat.name }}
+        {% if cat.show_icon %}<span class="cat-icon">{{ cat_icon(cat.name, cat.slug, cat.icon) }}</span> {% endif %}{{ cat.name }}
       </a>
       {% endfor %}
     </nav>

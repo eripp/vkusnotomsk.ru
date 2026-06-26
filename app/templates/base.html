@@ -142,12 +142,10 @@
   <!-- Профиль -->
   <a href="/account" class="nav-profile" id="nav-profile">
     <span class="nav-profile-name" id="nav-profile-name">Личный кабинет</span>
-    <span class="nav-profile-arrow">›</span>
   </a>
 
   <nav class="nav-section">
     <a href="/account" class="nav-link">Мои заказы</a>
-    <a href="/account" class="nav-link">Мои адреса</a>
   </nav>
 
   <!-- Город + время работы -->
@@ -201,6 +199,30 @@
     <p class="auth-hint">Введите номер телефона — пришлём код подтверждения</p>
     <input id="auth-phone" class="auth-input" type="tel" inputmode="tel"
            placeholder="+7 (___) ___-__-__" autocomplete="tel">
+
+    <p class="auth-hint auth-channel-hint">Куда отправить код:</p>
+    <div class="auth-channels" id="auth-channels">
+      <button type="button" class="auth-channel active" data-channel="sms" onclick="auth.pickChannel('sms')">
+        <img src="/static/img/sms_logo.svg" alt="" class="auth-channel-ico">
+        <span>SMS</span>
+      </button>
+      <button type="button" class="auth-channel" data-channel="tg" onclick="auth.pickChannel('tg')">
+        <img src="/static/img/telegram_logo.svg" alt="" class="auth-channel-ico">
+        <span>Telegram</span>
+      </button>
+      <button type="button" class="auth-channel" data-channel="max" disabled aria-disabled="true">
+        <img src="/static/img/max_logo.svg" alt="" class="auth-channel-ico">
+        <span>MAX</span>
+      </button>
+      <button type="button" class="auth-channel" data-channel="vk" disabled aria-disabled="true">
+        <img src="/static/img/vk_logo.svg" alt="" class="auth-channel-ico">
+        <span>VK</span>
+      </button>
+    </div>
+
+    <!-- Невидимая SmartCaptcha (рендерится, если задан sitekey) -->
+    <div id="auth-captcha" style="display:none"></div>
+
     <button class="btn-primary btn-block" onclick="auth.sendCode()">Получить код</button>
   </div>
 
@@ -241,12 +263,62 @@ document.addEventListener('keydown', (e) => {
 
 // ─── Авторизация по OTP (общая модалка) ──────────────────────────────────────
 const auth = {
+  channel: 'sms',   // выбранный канал доставки кода (SMS — единственный рабочий)
+  _capWidgetId: null,   // id отрендеренного виджета SmartCaptcha
+  _capSitekey: null,    // клиентский ключ ('' → капча выключена), null → ещё не запрашивали
+  _capResolve: null,    // resolve промиса ожидания токена
+
+  // Готовит капчу: тянет sitekey и (один раз) рендерит невидимый виджет.
+  async _ensureCaptcha() {
+    if (this._capSitekey === null) {
+      try {
+        const r = await fetch('/api/auth/captcha-sitekey');
+        this._capSitekey = (await r.json()).sitekey || '';
+      } catch { this._capSitekey = ''; }
+    }
+    if (!this._capSitekey) return false;            // капча выключена
+    if (this._capWidgetId !== null) return true;    // уже отрендерена
+
+    // грузим скрипт SmartCaptcha один раз
+    if (!window.smartCaptcha) {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://smartcaptcha.cloud.yandex.ru/captcha.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      }).catch(() => {});
+    }
+    if (!window.smartCaptcha) return false;
+    this._capWidgetId = window.smartCaptcha.render('auth-captcha', {
+      sitekey: this._capSitekey,
+      invisible: true,
+      hideShield: true,
+      callback: (token) => { if (this._capResolve) { this._capResolve(token); this._capResolve = null; } },
+    });
+    return true;
+  },
+
+  // Возвращает токен капчи ('' если капча выключена).
+  async _captchaToken() {
+    const on = await this._ensureCaptcha();
+    if (!on) return '';
+    return new Promise((resolve) => {
+      this._capResolve = resolve;
+      window.smartCaptcha.execute(this._capWidgetId);
+    });
+  },
   open() {
     document.getElementById('auth-overlay').classList.add('open');
     document.getElementById('auth-modal').classList.add('open');
     document.body.style.overflow = 'hidden';
     this.back();
     setTimeout(() => document.getElementById('auth-phone').focus(), 50);
+  },
+  pickChannel(ch) {
+    this.channel = ch;
+    document.querySelectorAll('#auth-channels .auth-channel').forEach(b => {
+      b.classList.toggle('active', b.dataset.channel === ch);
+    });
   },
   close() {
     document.getElementById('auth-overlay').classList.remove('open');
@@ -307,10 +379,13 @@ const auth = {
     if (phone.replace(/\D/g, '').length < 10) { this._err('Введите корректный номер телефона'); return; }
     this._err('');
     try {
+      const captcha_token = await this._captchaToken();
       const res = await fetch('/api/auth/send-otp', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, channel: 'tg' }),
+        body: JSON.stringify({ phone, channel: this.channel, captcha_token }),
       });
+      // капча одноразовая — сбрасываем для возможной повторной отправки
+      if (this._capWidgetId !== null) window.smartCaptcha.reset(this._capWidgetId);
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Ошибка отправки кода');
       // переходим к вводу кода
@@ -320,7 +395,7 @@ const auth = {
       const dev = document.getElementById('auth-dev-code');
       if (data.dev_code) {
         dev.style.display = '';
-        dev.innerHTML = `Тестовый режим — ваш код: <b>${data.dev_code}</b>`;
+        dev.innerHTML = `Код не доставлен на телефон — ваш код: <b>${data.dev_code}</b>`;
       } else {
         dev.style.display = 'none';
       }

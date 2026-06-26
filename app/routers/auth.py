@@ -3,7 +3,7 @@ import random
 import string
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -12,11 +12,14 @@ from app.database import get_db
 from app.models import OtpCode, OtpChannel, User
 from app.services.jwt import create_access_token, decode_access_token
 from app.services.notifications import send_otp_code
+from app.services import idgtl
+from app.services import captcha
 
 router = APIRouter(tags=["auth"])
 
-OTP_TTL_SECONDS = 300      # 5 минут
+OTP_TTL_SECONDS = 300        # 5 минут жизни кода
 OTP_MAX_ATTEMPTS = 5
+OTP_RESEND_COOLDOWN = 60     # не чаще одного кода в 60с на номер (антифлуд)
 JWT_COOKIE = "vkusno_token"
 JWT_TTL_DAYS = 30
 
@@ -25,7 +28,8 @@ JWT_TTL_DAYS = 30
 
 class SendOtpIn(BaseModel):
     phone: str
-    channel: str = "max"   # "max" | "tg"
+    channel: str = "tg"   # "tg" (рабочий) | "sms" | "max"/"vk" (заглушки)
+    captcha_token: str = ""   # токен Яндекс SmartCaptcha (если капча включена)
 
 
 class VerifyOtpIn(BaseModel):
@@ -57,13 +61,40 @@ def _gen_code() -> str:
 # ─── Эндпоинты ────────────────────────────────────────────────────────────────
 
 @router.post("/send-otp")
-async def send_otp(payload: SendOtpIn, db: AsyncSession = Depends(get_db)):
+async def send_otp(payload: SendOtpIn, request: Request, db: AsyncSession = Depends(get_db)):
     phone = _normalize_phone(payload.phone)
+
+    # Антибот: проверяем токен SmartCaptcha (если капча настроена — иначе пропуск).
+    client_ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                 or (request.client.host if request.client else None))
+    if not await captcha.verify(payload.captcha_token, client_ip):
+        raise HTTPException(status_code=400, detail="Не пройдена проверка «я не робот». Обновите страницу.")
 
     try:
         channel = OtpChannel(payload.channel)
     except ValueError:
-        channel = OtpChannel.max
+        channel = OtpChannel.tg
+
+    # Антифлуд: не выдаём новый код, если последний по этому номеру создан
+    # меньше OTP_RESEND_COOLDOWN секунд назад. id — последовательный, поэтому
+    # берём самый свежий код и сравниваем его время выпуска (expires - TTL).
+    last = (
+        await db.execute(
+            select(OtpCode)
+            .where(OtpCode.phone == phone)
+            .order_by(OtpCode.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if last is not None:
+        issued_at = last.expires_at - timedelta(seconds=OTP_TTL_SECONDS)
+        elapsed = (datetime.utcnow() - issued_at).total_seconds()
+        if elapsed < OTP_RESEND_COOLDOWN:
+            wait = int(OTP_RESEND_COOLDOWN - elapsed) + 1
+            raise HTTPException(
+                status_code=429,
+                detail=f"Запросить новый код можно через {wait} с",
+            )
 
     # инвалидируем старые коды для этого телефона
     await db.execute(
@@ -71,10 +102,29 @@ async def send_otp(payload: SendOtpIn, db: AsyncSession = Depends(get_db)):
         .where(OtpCode.phone == phone, OtpCode.used == False)
         .values(used=True)
     )
-
-    code = _gen_code()
     expires = datetime.utcnow() + timedelta(seconds=OTP_TTL_SECONDS)
 
+    # ── Путь 1: внешний верификатор i-dgtl (SMS / Telegram Gateway). Провайдер
+    #    сам генерирует, шлёт и проверяет код — мы храним только его uuid. ──
+    if idgtl.is_supported(channel) and await idgtl.is_configured():
+        uuid = await idgtl.idgtl_send(phone, channel)
+        if uuid:
+            otp = OtpCode(
+                phone=phone,
+                code_hash="",
+                provider_uuid=uuid,
+                channel=channel,
+                expires_at=expires,
+            )
+            db.add(otp)
+            await db.commit()
+            return {"status": "sent", "expires_in": OTP_TTL_SECONDS, "channel": channel.value}
+        # i-dgtl настроен, но отправка не удалась — отдаём явную ошибку
+        raise HTTPException(status_code=502, detail="Не удалось отправить код. Попробуйте позже.")
+
+    # ── Путь 2: код генерируем сами (каналы-заглушки MAX/VK либо i-dgtl не
+    #    настроен). delivered=False → показываем код на экране (dev_code). ──
+    code = _gen_code()
     otp = OtpCode(
         phone=phone,
         code_hash=_hash_code(code),
@@ -84,16 +134,10 @@ async def send_otp(payload: SendOtpIn, db: AsyncSession = Depends(get_db)):
     db.add(otp)
     await db.commit()
 
-    # отправляем код (заглушка если ключей нет)
-    await send_otp_code(phone=phone, code=code, channel=channel)
+    delivered = await send_otp_code(phone=phone, code=code, channel=channel)
 
-    resp = {"status": "sent", "expires_in": OTP_TTL_SECONDS}
-
-    # Dev-режим: если НИ ОДИН канал доставки (Telegram Gateway / TG-бот / MAX)
-    # не настроен, код никуда не уйдёт — возвращаем его в ответе, чтобы вход
-    # работал на тест/временном домене. На проде с ключами это отключается.
-    from app.config import settings as _s
-    if not _s.TG_GATEWAY_TOKEN and not _s.TG_BOT_TOKEN and not _s.MAX_API_KEY:
+    resp = {"status": "sent", "expires_in": OTP_TTL_SECONDS, "channel": channel.value}
+    if not delivered:
         resp["dev_code"] = code
 
     return resp
@@ -121,17 +165,32 @@ async def verify_otp(payload: VerifyOtpIn, response: Response, db: AsyncSession 
     if not otp:
         raise HTTPException(status_code=400, detail="Код устарел или не существует")
 
-    if otp.attempts >= OTP_MAX_ATTEMPTS:
-        raise HTTPException(status_code=429, detail="Слишком много попыток, запросите новый код")
+    # ── Проверка через i-dgtl: код проверяет сам провайдер по uuid сессии. ──
+    if otp.provider_uuid:
+        status = await idgtl.idgtl_check(otp.provider_uuid, payload.code.strip())
+        if status == "CONFIRMED":
+            otp.used = True
+        elif status == "WRONG_CODE":
+            raise HTTPException(status_code=400, detail="Неверный код")
+        elif status in ("EXPIRED", "NOT_FOUND"):
+            otp.used = True
+            await db.commit()
+            raise HTTPException(status_code=400, detail="Код устарел, запросите новый")
+        else:
+            raise HTTPException(status_code=502, detail="Не удалось проверить код. Попробуйте позже.")
+    else:
+        # ── Локальная проверка (каналы-заглушки / самосгенерированный код). ──
+        if otp.attempts >= OTP_MAX_ATTEMPTS:
+            raise HTTPException(status_code=429, detail="Слишком много попыток, запросите новый код")
 
-    if otp.code_hash != code_hash:
-        otp.attempts += 1
-        await db.commit()
-        left = OTP_MAX_ATTEMPTS - otp.attempts
-        raise HTTPException(status_code=400, detail=f"Неверный код. Осталось попыток: {left}")
+        if otp.code_hash != code_hash:
+            otp.attempts += 1
+            await db.commit()
+            left = OTP_MAX_ATTEMPTS - otp.attempts
+            raise HTTPException(status_code=400, detail=f"Неверный код. Осталось попыток: {left}")
 
-    # код верный — помечаем использованным
-    otp.used = True
+        # код верный — помечаем использованным
+        otp.used = True
 
     # создаём/находим пользователя
     user_result = await db.execute(select(User).where(User.phone == phone))
@@ -140,6 +199,10 @@ async def verify_otp(payload: VerifyOtpIn, response: Response, db: AsyncSession 
         user = User(phone=phone)
         db.add(user)
         await db.flush()
+
+    # телефон успешно подтверждён этим каналом
+    user.phone_verified = True
+    user.phone_verified_via = otp.channel.value
 
     await db.commit()
 
@@ -158,6 +221,12 @@ async def verify_otp(payload: VerifyOtpIn, response: Response, db: AsyncSession 
         "status": "ok",
         "user": {"id": user.id, "phone": user.phone, "name": user.name},
     }
+
+
+@router.get("/captcha-sitekey")
+async def captcha_sitekey():
+    """Клиентский ключ SmartCaptcha для рендера капчи (пустой → капча выключена)."""
+    return {"sitekey": await captcha.get_sitekey()}
 
 
 @router.post("/logout")

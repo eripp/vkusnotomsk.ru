@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Оплата заказа #{{ order.id }} · {{ site_name(request) }}{% endblock %}
+{% block title %}Оплата заказа · {{ site_name(request) }}{% endblock %}
 {% block robots %}noindex, nofollow{% endblock %}
 
 {% block body %}
@@ -16,22 +16,25 @@
     <div class="pw-spinner-icon">⏳</div>
     <h2>Ожидаем подтверждение оплаты</h2>
     <p class="co-hint">Это займёт несколько секунд…</p>
+    <p class="co-hint" style="margin-top:8px">Передумали платить онлайн? Корзина сохранена.</p>
+    <a href="/checkout" class="btn-secondary" style="display:inline-block;margin-top:12px">Вернуться к оформлению</a>
   </div>
 
   <div id="pw-success" class="pw-state" style="display:none">
     <div class="pw-icon-ok">✅</div>
     <h2>Оплата прошла!</h2>
-    <p class="co-hint">Заказ #{{ order.id }} принят и передан в работу</p>
-    <a href="/order/{{ order.id }}" class="btn-primary" style="display:inline-block;margin-top:20px">Посмотреть заказ</a>
+    <p class="co-hint">Заказ принят и передан в работу</p>
+    <a href="#" id="pw-order-link" class="btn-primary" style="display:inline-block;margin-top:20px">Посмотреть заказ</a>
   </div>
 
   <div id="pw-failed" class="pw-state" style="display:none">
     <div class="pw-icon-fail">❌</div>
-    <h2>Оплата не прошла</h2>
-    <p class="co-hint">Вы можете попробовать снова или выбрать другой способ оплаты</p>
+    <h2>Оплата пока не подтверждена</h2>
+    <p class="co-hint">Если вы оплатили — заказ появится в течение пары минут.
+      Если передумали — товары остались в корзине, можно вернуться и сменить способ оплаты.</p>
     <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;flex-wrap:wrap">
-      <a href="/checkout" class="btn-primary">Оформить заново</a>
-      <a href="/order/{{ order.id }}" class="btn-secondary">Детали заказа</a>
+      <a href="/checkout" class="btn-primary">Вернуться к оформлению</a>
+      <a href="/" class="btn-secondary">На главную</a>
     </div>
   </div>
 </div>
@@ -39,26 +42,30 @@
 
 {% block scripts %}
 <script>
-const ORDER_ID = {{ order.id }};
+const PAY_REF = {{ ref | tojson }};
+let attempts = 0;
+const MAX_ATTEMPTS = 40;   // ~2 минуты
 
 async function poll() {
+  attempts++;
   try {
-    const res  = await fetch(`/api/payment/status/${ORDER_ID}`);
+    const res  = await fetch(`/api/payment/status/${PAY_REF}`);
     const data = await res.json();
-
-    if (data.payment_status === 'paid') {
+    if (data.paid && data.order_id) {
       document.getElementById('pw-spinner').style.display = 'none';
+      document.getElementById('pw-order-link').href = `/order/${data.order_id}`;
       document.getElementById('pw-success').style.display = '';
-      return; // прекращаем поллинг
-    }
-
-    if (data.order_status === 'canceled') {
-      document.getElementById('pw-spinner').style.display = 'none';
-      document.getElementById('pw-failed').style.display = '';
+      // корзину можно очистить — заказ оплачен
+      try { cart._save([]); } catch {}
       return;
     }
-  } catch { /* продолжаем поллинг */ }
+  } catch { /* продолжаем */ }
 
+  if (attempts >= MAX_ATTEMPTS) {
+    document.getElementById('pw-spinner').style.display = 'none';
+    document.getElementById('pw-failed').style.display = '';
+    return;
+  }
   setTimeout(poll, 3000);
 }
 

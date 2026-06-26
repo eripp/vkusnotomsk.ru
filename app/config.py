@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     TG_BOT_USERNAME: str = ""
     TG_GATEWAY_TOKEN: str = ""   # Telegram Gateway API (gatewayapi.telegram.org) — коды в Telegram по номеру
     MAX_API_KEY: str = ""
+    SMSRU_API_ID: str = ""       # SMS.RU — api_id для отправки кодов по SMS
+    IDGTL_API_KEY: str = ""      # i-dgtl — ключ для Authorization: Basic (модуль верификации)
+    IDGTL_GATEWAY_ID: str = ""   # i-dgtl — ID модуля подтверждения (gatewayId)
+    SMARTCAPTCHA_SITEKEY: str = ""   # Яндекс SmartCaptcha — клиентский ключ (на фронте)
+    SMARTCAPTCHA_SECRET: str = ""    # Яндекс SmartCaptcha — серверный ключ (валидация токена)
     SMTP_HOST: str = "smtp.yandex.ru"
     SMTP_PORT: int = 465
     SMTP_USER: str = ""

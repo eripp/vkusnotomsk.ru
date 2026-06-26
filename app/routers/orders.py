@@ -13,7 +13,7 @@ from sqlalchemy import select
 from app.database import get_db
 from app.models import (
     Order, OrderItem, OrderStatus, PaymentMethod, PaymentStatus,
-    Product, DeliveryZone, User, Promocode,
+    Product, DeliveryZone, User, Promocode, PendingOrder,
 )
 from app.services.zones import find_zone
 from app.services.dadata import suggest_address, geocode_reverse
@@ -58,6 +58,71 @@ class CreateOrderIn(BaseModel):
     promocode: Optional[str] = None
     cashback_spend: int = 0
     items: list[OrderItemIn]
+
+
+# ─── Материализация заказа из подготовленных данных ──────────────────────────
+
+async def _materialize_order(db: AsyncSession, data: dict, paid: bool) -> Order:
+    """Создаёт Order + позиции из словаря order_data. Списывает кешбэк,
+    инкрементит промокод. Если paid=True — статус оплачен + начисление кешбэка.
+    Используется и при cash/terminal (сразу), и в webhook после онлайн-оплаты."""
+    order = Order(
+        user_id=data.get("user_id"),
+        phone=data["phone"],
+        address=data["address"],
+        address_lat=data.get("lat"),
+        address_lon=data.get("lon"),
+        zone_id=data.get("zone_id"),
+        delivery_date=date.fromisoformat(data["delivery_date"]),
+        slot_start=_parse_time(data["slot_start"]),
+        slot_end=_parse_time(data["slot_end"]),
+        schedule_entry_id=data.get("schedule_entry_id"),
+        payment_method=PaymentMethod(data["payment_method"]),
+        cash_change_from=data.get("cash_change_from"),
+        status=OrderStatus.new,
+        payment_status=PaymentStatus.paid if paid else PaymentStatus.pending,
+        promocode_id=data.get("promocode_id"),
+        discount_amount=data.get("discount_amount", 0),
+        cashback_spent=data.get("cashback_spend", 0),
+        delivery_price=data.get("delivery_price", 0),
+        total_amount=data["total_amount"],
+    )
+    db.add(order)
+    await db.flush()
+
+    for it in data["items"]:
+        db.add(OrderItem(
+            order_id=order.id, product_id=it["product_id"],
+            product_name=it["product_name"], product_price=it["product_price"],
+            quantity=it["quantity"], line_total=it["line_total"],
+        ))
+
+    # списание кешбэка
+    if data.get("cashback_spend", 0) > 0 and order.user_id:
+        await spend_cashback(db, order.user_id, data["cashback_spend"], order.id)
+
+    # инкремент промокода
+    if data.get("promocode_id"):
+        pr = (await db.execute(select(Promocode).where(Promocode.id == data["promocode_id"]))).scalar_one_or_none()
+        if pr:
+            pr.usage_count += 1
+
+    await db.commit()
+
+    # начисление кешбэка — только для оплаченного заказа
+    if paid and order.user_id:
+        pr = None
+        if data.get("promocode_id"):
+            pr = (await db.execute(select(Promocode).where(Promocode.id == data["promocode_id"]))).scalar_one_or_none()
+        try:
+            earned = await earn_cashback(db, order.user_id, order, pr)
+            if earned:
+                order.cashback_earned = earned
+                await db.commit()
+        except Exception as exc:
+            logger.warning("[cashback] начисление: %s", exc)
+
+    return order
 
 
 # ─── Страница оформления ──────────────────────────────────────────────────────
@@ -126,8 +191,20 @@ async def cashback_balance(
 
 # ─── API: создать заказ ───────────────────────────────────────────────────────
 
+def _base_url(request: Request) -> str:
+    """Базовый URL сайта по входящему запросу (с учётом проксирования за nginx).
+    Используется для return_url YooKassa — чтобы вернуть на тот же домен,
+    с которого пришёл покупатель (v2.vkusnotomsk.ru, основной и т.д.)."""
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if not host:
+        return settings.SITE_URL.rstrip("/")
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    return f"{proto}://{host}"
+
+
 @router.post("/orders")
 async def create_order(
+    request: Request,
     payload: CreateOrderIn,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
@@ -135,12 +212,17 @@ async def create_order(
     if not payload.items:
         raise HTTPException(status_code=400, detail="Корзина пуста")
 
+    # если залогинен и имя в профиле пустое — сохраняем введённое в заказе
+    if current_user and not (current_user.name or "").strip() and payload.name.strip():
+        current_user.name = payload.name.strip()
+        await db.commit()
+
     # товары из БД
     product_ids = [i.product_id for i in payload.items]
     result = await db.execute(select(Product).where(Product.id.in_(product_ids)))
     db_products = {p.id: p for p in result.scalars().all()}
 
-    order_items_data = []
+    order_items_data: list[dict] = []
     subtotal = 0
     for item in payload.items:
         p = db_products.get(item.product_id)
@@ -213,78 +295,71 @@ async def create_order(
     except ValueError:
         raise HTTPException(status_code=400, detail="Неверный способ оплаты")
 
-    slot_start = _parse_time(payload.slot_start)
-    slot_end   = _parse_time(payload.slot_end)
+    # данные будущего заказа в едином виде (для немедленного создания или для
+    # материализации после оплаты)
+    order_data = {
+        "user_id": current_user.id if current_user else None,
+        "phone": payload.phone,
+        "address": payload.address,
+        "lat": payload.lat,
+        "lon": payload.lon,
+        "zone_id": zone_id,
+        "delivery_date": payload.delivery_date.isoformat(),
+        "slot_start": payload.slot_start,
+        "slot_end": payload.slot_end,
+        "schedule_entry_id": payload.schedule_entry_id,
+        "payment_method": payment_method.value,
+        "cash_change_from": payload.cash_change_from,
+        "promocode_id": promo_obj.id if promo_obj else None,
+        "discount_amount": discount_amount,
+        "cashback_spend": cashback_spend,
+        "delivery_price": delivery_price,
+        "total_amount": total_amount,
+        "items": order_items_data,
+    }
 
-    order = Order(
-        user_id=current_user.id if current_user else None,
-        phone=payload.phone,
-        address=payload.address,
-        address_lat=payload.lat,
-        address_lon=payload.lon,
-        zone_id=zone_id,
-        delivery_date=payload.delivery_date,
-        slot_start=slot_start,
-        slot_end=slot_end,
-        schedule_entry_id=payload.schedule_entry_id,
-        payment_method=payment_method,
-        cash_change_from=payload.cash_change_from,
-        status=OrderStatus.new,
-        payment_status=PaymentStatus.pending,
-        promocode_id=promo_obj.id if promo_obj else None,
-        discount_amount=discount_amount,
-        cashback_spent=cashback_spend,
-        delivery_price=delivery_price,
-        total_amount=total_amount,
-    )
-    db.add(order)
-    await db.flush()
-
-    for d in order_items_data:
-        db.add(OrderItem(order_id=order.id, **d))
-
-    # списываем кешбэк до commit
-    if cashback_spend > 0 and current_user:
-        await spend_cashback(db, current_user.id, cashback_spend, order.id)
-
-    # инкрементируем счётчик промокода
-    if promo_obj:
-        promo_obj.usage_count += 1
-
-    await db.commit()
-
-    # начисляем кешбэк (после оплаты по факту — но для cash/terminal сразу)
-    if current_user and payment_method != PaymentMethod.online:
-        earned = await earn_cashback(db, current_user.id, order, promo_obj)
-        order.cashback_earned = earned
-        await db.commit()
-
-    # уведомление о новом заказе
-    try:
-        await notify_order_new(db, order)
-    except Exception as exc:
-        logger.warning("[notify] ошибка при отправке уведомления: %s", exc)
-
-    # YooKassa
+    # ── Онлайн-оплата: заказ НЕ создаём, пока не пришла оплата ────────────────
+    # Сохраняем черновик и создаём платёж; Order появится в webhook (paid).
     if payment_method == PaymentMethod.online:
-        return_url = f"{settings.SITE_URL}/pay/{order.id}"
+        pending = PendingOrder(data=order_data)
+        db.add(pending)
+        await db.flush()
+
+        email = current_user.email if current_user and current_user.email else None
+        receipt = _build_receipt(
+            items=order_items_data,
+            delivery_price=delivery_price,
+            reduction=discount_amount + cashback_spend,
+            phone=payload.phone,
+            email=email,
+            total_amount=total_amount,
+        )
         try:
             yk = await create_payment(
-                order_id=order.id,
+                order_id=pending.id,          # для metadata/idempotency используем pending.id
                 amount=total_amount,
-                description=f"Заказ #{order.id} · Вкусно Томск",
-                return_url=return_url,
+                description=f"Заказ · Вкусно Томск",
+                return_url=f"{_base_url(request)}/pay/p{pending.id}",
+                receipt=receipt,
             )
         except Exception:
             yk = {"payment_id": None, "confirmation_url": None}
 
-        if yk["payment_id"]:
-            order.yookassa_payment_id = yk["payment_id"]
-            await db.commit()
+        if not yk["confirmation_url"]:
+            # платёж не создан — откатываем черновик, заказа нет
+            await db.rollback()
+            raise HTTPException(status_code=502, detail="Не удалось создать платёж. Попробуйте позже.")
 
-        payment_url = yk["confirmation_url"] or f"{settings.SITE_URL}/pay/{order.id}"
-        return {"order_id": order.id, "payment_url": payment_url}
+        pending.yookassa_payment_id = yk["payment_id"]
+        await db.commit()
+        return {"pending_id": pending.id, "payment_url": yk["confirmation_url"]}
 
+    # ── Наличные / терминал: создаём заказ сразу ─────────────────────────────
+    order = await _materialize_order(db, order_data, paid=False)
+    try:
+        await notify_order_new(db, order)
+    except Exception as exc:
+        logger.warning("[notify] ошибка при отправке уведомления: %s", exc)
     return {"order_id": order.id}
 
 
@@ -332,6 +407,65 @@ async def detect_zone(lat: float, lon: float, db: AsyncSession = Depends(get_db)
         "free_delivery_from": zone.free_delivery_from,
         "min_order_sum": zone.min_order_sum,
     }
+
+
+# ─── Чек 54-ФЗ для YooKassa ──────────────────────────────────────────────────
+
+YOOKASSA_VAT_CODE = 7   # НДС 5% (УСН)
+
+
+def _build_receipt(items: list[dict], delivery_price: int, reduction: int,
+                   phone: str, email: str | None, total_amount: int) -> dict:
+    """Чек: позиции товаров + доставка. Сумма позиций строго = total_amount.
+    `reduction` (скидка промокода + списанный кешбэк) распределяется по товарам
+    пропорционально; остаток от округления добивается на последней позиции."""
+    goods_sum = sum(i["line_total"] for i in items)
+    # целевая сумма по товарам (без доставки), которую должен дать чек
+    target_goods = max(0, total_amount - delivery_price)
+
+    lines = []
+    allocated = 0
+    n = len(items)
+    for idx, it in enumerate(items):
+        if idx < n - 1 and goods_sum > 0:
+            val = round(it["line_total"] / goods_sum * target_goods)
+        else:
+            val = target_goods - allocated   # последняя позиция добивает до точной суммы
+        allocated += val
+        # YooKassa: amount.value — цена за ЕДИНИЦУ; сумма строки = amount × quantity.
+        # Со скидками поштучная цена может не делиться нацело, поэтому делаем
+        # quantity=1, а итог строки кладём в amount (кол-во отражаем в названии).
+        qty = it["quantity"]
+        desc = it["product_name"]
+        if qty > 1:
+            desc = f"{desc} ({qty} шт.)"
+        lines.append({
+            "description": desc[:128],
+            "quantity": "1",
+            "amount": {"value": f"{val}.00", "currency": "RUB"},
+            "vat_code": YOOKASSA_VAT_CODE,
+            "payment_subject": "commodity",
+            "payment_mode": "full_payment",
+            "measure": "piece",
+        })
+
+    if delivery_price > 0:
+        lines.append({
+            "description": "Доставка",
+            "quantity": "1",
+            "amount": {"value": f"{delivery_price}.00", "currency": "RUB"},
+            "vat_code": YOOKASSA_VAT_CODE,
+            "payment_subject": "service",
+            "payment_mode": "full_payment",
+            "measure": "piece",
+        })
+
+    customer = {}
+    if email:
+        customer["email"] = email
+    if phone:
+        customer["phone"] = "".join(c for c in phone if c.isdigit())
+    return {"customer": customer, "items": lines}
 
 
 # ─── Утилита ──────────────────────────────────────────────────────────────────

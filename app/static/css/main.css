@@ -368,6 +368,20 @@ img { display: block; max-width: 100%; }
 }
 .auth-input:focus { border-color: var(--brand); }
 #auth-code { letter-spacing: 6px; text-align: center; font-weight: 700; }
+
+/* Выбор канала доставки кода */
+.auth-channel-hint { margin-bottom: 8px; }
+.auth-channels { display: flex; gap: 8px; margin-bottom: 14px; }
+.auth-channel {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 6px; border: 1.5px solid #e0dfd8; border-radius: 10px;
+  background: #fff; cursor: pointer; transition: border-color .15s, background .15s;
+  font-size: 12px; font-weight: 600; color: #555;
+}
+.auth-channel:not(:disabled):hover { border-color: #c9c8c0; }
+.auth-channel.active { border-color: var(--brand); background: #f4f8ee; color: #1a1a18; }
+.auth-channel:disabled { opacity: .4; cursor: not-allowed; }
+.auth-channel-ico { width: 26px; height: 26px; object-fit: contain; }
 .auth-link {
   display: inline-block; background: none; border: none; padding: 0;
   color: var(--brand); font-size: 13px; cursor: pointer;
@@ -389,17 +403,23 @@ img { display: block; max-width: 100%; }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
+  /* страховка от горизонтального скролла страницы — на body, не на sticky-контейнерах */
+  body { overflow-x: hidden; }
+
   /* layout в столбик: полоса категорий сверху, контент под ней */
-  .layout { flex-direction: column; }
+  .layout { flex-direction: column; max-width: 100%; }
 
   /* Сайдбар → горизонтальная sticky-полоса под шапкой */
   .sidebar {
-    width: 100%; height: auto; flex-shrink: 0;
+    width: 100%; max-width: 100%; box-sizing: border-box; flex-shrink: 0;
+    height: auto;
     position: sticky; top: 56px; z-index: 150;
-    display: flex; align-items: center; gap: 6px;
+    display: flex; flex-direction: row; align-items: center; gap: 6px;
     padding: 8px 10px; overflow: visible;
     border-right: none; border-bottom: 1px solid #e8e6df;
   }
+  /* Карточка «бесплатная доставка» — только для десктоп-колонки; в полосе она ломает ширину */
+  .free-deliv-card { display: none; }
   .cat-search-btn {
     flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
@@ -417,6 +437,9 @@ img { display: block; max-width: 100%; }
     padding: 8px 14px; border-left: none; border-radius: 999px;
     background: #f5f5f3; scroll-snap-align: start;
   }
+  /* иконки категорий — только для вертикального сайдбара (десктоп);
+     в горизонтальной полосе пилюль их не показываем */
+  .cat-icon { display: none; }
   .cat-item:hover { background: #ededed; }
   .cat-item.active { background: var(--brand); color: #fff; border-left: none; }
 
@@ -448,15 +471,9 @@ img { display: block; max-width: 100%; }
     height: calc(100vh - 40px);
     flex-direction: column;
   }
-  .pm-gallery {
-    width: 100%; flex-shrink: 0; height: 280px;
-    flex-direction: row;
-  }
-  .pm-gallery-main { height: 280px; flex: none; }
-  .pm-gallery-main-placeholder { height: 280px; flex: none; }
-  .pm-body { padding: 20px 20px 12px; }
-  .pm-footer { padding: 12px 20px; }
-  .pm-price { font-size: 22px; }
+  /* ПРИМЕЧАНИЕ: мобильные правила .pm-* вынесены ниже, ПОСЛЕ секции
+     «Product Modal», иначе базовые .pm-* (объявленные позже в файле)
+     перебивают их по каскаду при равной специфичности. */
 }
 @media (max-width: 480px) {
   .product-grid { grid-template-columns: repeat(2, 1fr); }
@@ -593,7 +610,21 @@ img { display: block; max-width: 100%; }
   font-size: 20px; font-weight: 700; color: var(--brand);
   background: none; border: none; padding: 0 10px; height: 100%;
 }
-.pm-footer .add-btn-counter .qty { font-size: 17px; font-weight: 700; }
+.pm-footer .add-btn-counter .qty { font-size: 17px; font-weight: 700; color: #1a1a18; }
+
+/* Мобильная модалка — вертикальная: галерея сверху, контент под ней.
+   Стоит ПОСЛЕ базовых .pm-* — иначе каскад перебивает width:100% базовым 420px. */
+@media (max-width: 768px) {
+  .pm-gallery {
+    width: 100%; flex-shrink: 0; height: 280px;
+    flex-direction: row;
+  }
+  .pm-gallery-main { height: 280px; flex: none; }
+  .pm-gallery-main-placeholder { height: 280px; flex: none; }
+  .pm-body { padding: 20px 20px 12px; }
+  .pm-footer { padding: 12px 20px; }
+  .pm-price { font-size: 22px; }
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CHECKOUT — страница оформления заказа

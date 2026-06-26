@@ -25,15 +25,22 @@ let _activeSlug = null;
 function setActiveCat(slug) {
   const changed = slug !== _activeSlug;
   _activeSlug = slug;
+  let activeItem = null;
   catItems.forEach(i => {
     const on = i.dataset.slug === slug;
     i.classList.toggle('active', on);
-    // на мобилке подтягиваем активную пилюлю в видимую область полосы
-    // (только при смене категории, чтобы не дёргать при каждом тике скролла)
-    if (on && changed && getComputedStyle(i).flexShrink === '0') {
-      i.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    }
+    if (on) activeItem = i;
   });
+  // на мобилке подтягиваем активную пилюлю в центр горизонтальной полосы.
+  // ВАЖНО: скроллим ТОЛЬКО .cat-nav по X — не scrollIntoView, иначе браузер
+  // прокручивает и окно по вертикали, дёргая страницу при ручном скролле.
+  if (activeItem && changed) {
+    const nav = activeItem.closest('.cat-nav');
+    if (nav && nav.scrollWidth > nav.clientWidth) {
+      const target = activeItem.offsetLeft - (nav.clientWidth - activeItem.offsetWidth) / 2;
+      nav.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+    }
+  }
 }
 
 function scrollToCat(slug) {
@@ -195,14 +202,19 @@ const productModal = {
   _current: null,   // текущий slug
 
   async open(slug) {
+    const modal = document.getElementById('product-modal');
+    const alreadyOpen = modal.classList.contains('open');   // переключение варианта
     this._current = slug;
     history.pushState({ product: slug }, '', `/product/${slug}`);
     document.getElementById('modal-overlay').classList.add('open');
-    const modal = document.getElementById('product-modal');
     modal.classList.add('open');
     document.body.style.overflow = 'hidden';
-    document.getElementById('modal-content').innerHTML =
-      '<div style="padding:60px;text-align:center;color:#aaa;font-size:24px">⏳</div>';
+    // спиннер только при первом открытии; при смене варианта оставляем
+    // текущий контент видимым, чтобы фото не «прыгало»
+    if (!alreadyOpen) {
+      document.getElementById('modal-content').innerHTML =
+        '<div style="padding:60px;text-align:center;color:#aaa;font-size:24px">⏳</div>';
+    }
 
     try {
       const res = await fetch(`/api/product/${slug}`);
@@ -299,6 +311,9 @@ const productModal = {
 
     // рекомендации
     let recsHtml = '';
+    // Блок «Что ещё пригодится» временно скрыт (pm-recs-title / pm-recs-scroll).
+    // Чтобы вернуть — раскомментировать.
+    /*
     if (p.recommendations && p.recommendations.length) {
       const recCards = p.recommendations.map(r => `
         <div class="pm-rec-card" onclick="productModal.open('${r.slug}')">
@@ -313,6 +328,7 @@ const productModal = {
       recsHtml = `<div class="pm-recs-title">Что ещё пригодится</div>
         <div class="pm-recs-scroll">${recCards}</div>`;
     }
+    */
 
     return `
       ${gallery}
