@@ -202,13 +202,13 @@
 
     <p class="auth-hint auth-channel-hint">Куда отправить код:</p>
     <div class="auth-channels" id="auth-channels">
-      <button type="button" class="auth-channel active" data-channel="sms" onclick="auth.pickChannel('sms')">
-        <img src="/static/img/sms_logo.svg" alt="" class="auth-channel-ico">
-        <span>SMS</span>
-      </button>
-      <button type="button" class="auth-channel" data-channel="tg" onclick="auth.pickChannel('tg')">
+      <button type="button" class="auth-channel active" data-channel="tg" onclick="auth.pickChannel('tg')">
         <img src="/static/img/telegram_logo.svg" alt="" class="auth-channel-ico">
         <span>Telegram</span>
+      </button>
+      <button type="button" class="auth-channel" data-channel="sms" onclick="auth.pickChannel('sms')">
+        <img src="/static/img/sms_logo.svg" alt="" class="auth-channel-ico">
+        <span>SMS</span>
       </button>
       <button type="button" class="auth-channel" data-channel="max" disabled aria-disabled="true">
         <img src="/static/img/max_logo.svg" alt="" class="auth-channel-ico">
@@ -263,7 +263,7 @@ document.addEventListener('keydown', (e) => {
 
 // ─── Авторизация по OTP (общая модалка) ──────────────────────────────────────
 const auth = {
-  channel: 'sms',   // выбранный канал доставки кода (SMS — единственный рабочий)
+  channel: 'tg',   // вход через Telegram (прямой TG Gateway)
   _capWidgetId: null,   // id отрендеренного виджета SmartCaptcha
   _capSitekey: null,    // клиентский ключ ('' → капча выключена), null → ещё не запрашивали
   _capResolve: null,    // resolve промиса ожидания токена
@@ -415,7 +415,8 @@ const auth = {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Неверный код');
-      // успех — обновляем шапку и уходим в кабинет
+      // успех — мерджим корзину (локальная побеждает), затем в кабинет
+      try { await cart.mergeOnLogin(); } catch {}
       window.location.href = '/account';
     } catch (e) { this._err(e.message); }
   },

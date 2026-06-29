@@ -49,6 +49,10 @@ async def send_otp_code(phone: str, code: str, channel: OtpChannel) -> bool:
 
     if channel == OtpChannel.sms:
         logger.info("[OTP/SMS] phone=%s", phone)
+        # Основной шлюз — Plusofon; если не настроен, запасной — SMS.RU.
+        from app.services import plusofon
+        if await plusofon.is_configured():
+            return await plusofon.send_plusofon(phone, text)
         return await send_sms_ru(phone, text)
 
     # MAX / VK — заглушки: мессенджеры не умеют слать «холодный» код по номеру,

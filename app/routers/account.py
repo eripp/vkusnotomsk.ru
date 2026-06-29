@@ -80,6 +80,7 @@ async def account_orders(
         for item in items_res.scalars().all():
             items_map[item.order_id].append({
                 "product_name": item.product_name,
+                "product_price": item.product_price,
                 "quantity": item.quantity,
                 "line_total": item.line_total,
             })
@@ -91,6 +92,10 @@ async def account_orders(
             "payment_method": o.payment_method.value,
             "payment_status": o.payment_status.value,
             "total_amount": o.total_amount,
+            "delivery_price": o.delivery_price,
+            "discount_amount": o.discount_amount,
+            "cashback_spent": o.cashback_spent,
+            "cashback_earned": o.cashback_earned,
             "delivery_date": o.delivery_date.isoformat(),
             "slot_start": o.slot_start.strftime("%H:%M"),
             "slot_end": o.slot_end.strftime("%H:%M"),

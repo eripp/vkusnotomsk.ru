@@ -1,0 +1,74 @@
+{% extends "admin/base.html" %}
+{% block title %}Аудит{% endblock %}
+{% block page_title %}Аудит действий{% endblock %}
+{% set active = 'audit' %}
+
+{% block topbar_actions %}
+<form method="get" class="adm-filters" style="margin:0">
+  <input name="ip" value="{{ f_ip }}" placeholder="IP" style="width:150px">
+  <select name="action">
+    <option value="">Все действия</option>
+    {% for a, label in [('login','Вход'), ('otp_send','Отправка кода'), ('otp_verify','Проверка кода'), ('admin_login','Вход в админку')] %}
+    <option value="{{ a }}" {% if f_action == a %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <select name="status">
+    <option value="">Любой результат</option>
+    <option value="ok"      {% if f_status == 'ok' %}selected{% endif %}>OK</option>
+    <option value="fail"    {% if f_status == 'fail' %}selected{% endif %}>Отказ</option>
+    <option value="blocked" {% if f_status == 'blocked' %}selected{% endif %}>Блок</option>
+  </select>
+  <button type="submit">Фильтр</button>
+</form>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; gap:20px; align-items:flex-start">
+  <div style="flex:1; min-width:0">
+    <p style="color:#888; font-size:13px; margin-bottom:10px">Всего событий: {{ total }}</p>
+    <table class="adm-table">
+      <thead>
+        <tr><th>Время (UTC)</th><th>IP</th><th>Действие</th><th>Результат</th><th>Детали</th></tr>
+      </thead>
+      <tbody>
+        {% for e in events %}
+        <tr>
+          <td style="white-space:nowrap">{{ e.created_at.strftime('%d.%m %H:%M:%S') }}</td>
+          <td style="font-family:monospace"><a href="/admin/audit?ip={{ e.ip }}">{{ e.ip }}</a></td>
+          <td>{{ e.action }}</td>
+          <td>
+            <span style="font-size:12px; font-weight:700; padding:2px 8px; border-radius:10px;
+              {% if e.status == 'ok' %}background:#efffef;color:#1a7a1a
+              {% elif e.status == 'blocked' %}background:#fff0f0;color:#d00
+              {% else %}background:#fff8e0;color:#a07000{% endif %}">{{ e.status }}</span>
+          </td>
+          <td style="color:#666; font-size:13px">{{ e.detail or '' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" style="color:#aaa; padding:20px">Событий нет</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if pages > 1 %}
+    <div class="adm-pagination" style="margin-top:14px">
+      {% if page > 1 %}<a href="?ip={{ f_ip }}&action={{ f_action }}&status={{ f_status }}&page={{ page-1 }}">← Назад</a>{% endif %}
+      <span>Стр. {{ page }} из {{ pages }}</span>
+      {% if page < pages %}<a href="?ip={{ f_ip }}&action={{ f_action }}&status={{ f_status }}&page={{ page+1 }}">Вперёд →</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div style="width:260px; flex-shrink:0; background:#fff; border-radius:12px; padding:16px">
+    <div style="font-weight:700; margin-bottom:10px">Топ IP за 24 часа</div>
+    {% for ip, cnt in top_ip %}
+    <div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0; border-bottom:1px solid #f4f4f2">
+      <a href="/admin/audit?ip={{ ip }}" style="font-family:monospace">{{ ip }}</a>
+      <span style="font-weight:700">{{ cnt }}</span>
+    </div>
+    {% else %}
+    <div style="color:#aaa; font-size:13px">Нет данных</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

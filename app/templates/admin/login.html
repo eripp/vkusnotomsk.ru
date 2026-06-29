@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Вход · Вкусно</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #222;
+           min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px }
+    .login-card { width: 100%; max-width: 360px; background: #fff; border-radius: 14px;
+                  padding: 28px 26px; box-shadow: 0 12px 40px rgba(0,0,0,.35) }
+    .login-logo { font-size: 20px; font-weight: 700; color: #ff6b2c; margin-bottom: 4px }
+    .login-sub { font-size: 13px; color: #888; margin-bottom: 20px }
+    .login-field { margin-bottom: 14px }
+    .login-field label { display: block; font-size: 12px; color: #666; margin-bottom: 5px }
+    .login-field input { width: 100%; padding: 11px 13px; border: 1.5px solid #e0dfd8;
+                         border-radius: 9px; font-size: 15px; outline: none }
+    .login-field input:focus { border-color: #ff6b2c }
+    .login-btn { width: 100%; padding: 12px; border: none; border-radius: 9px;
+                 background: #ff6b2c; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer }
+    .login-btn:hover { background: #e85d1f }
+    .login-error { color: #c00; font-size: 13px; margin-bottom: 12px }
+  </style>
+</head>
+<body>
+  <form class="login-card" method="post" action="/admin/login/{{ secret }}">
+    <div class="login-logo">⚡ Вкусно · Админ</div>
+    <div class="login-sub">Вход в панель управления</div>
+    {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
+    <div class="login-field">
+      <label>Логин</label>
+      <input name="username" autocomplete="username" autofocus required>
+    </div>
+    <div class="login-field">
+      <label>Пароль</label>
+      <input name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button type="submit" class="login-btn">Войти</button>
+  </form>
+</body>
+</html>

@@ -239,9 +239,32 @@
     </div>
   </div>
 
+  <!-- Plusofon — отправка кода по SMS (основной шлюз) -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Plusofon — отправка кода по SMS (основной)</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Client <span style="color:#aaa;font-weight:400">— plusofon_client_id (id клиента из кабинета)</span></label>
+        <input name="plusofon_client_id" value="{{ val('plusofon_client_id') }}" placeholder="4851" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>Токен <span style="color:#aaa;font-weight:400">— plusofon_token (Bearer, ключ доступа)</span></label>
+        <input name="plusofon_token" value="{{ val('plusofon_token') }}" placeholder="ключ доступа" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>number_id <span style="color:#aaa;font-weight:400">— plusofon_number_id (id номера-отправителя)</span></label>
+        <input name="plusofon_number_id" value="{{ val('plusofon_number_id') }}" placeholder="напр. 2" autocomplete="off" style="font-family:monospace">
+      </div>
+      <p class="adm-hint" style="color:#888;font-size:12px;margin:4px 0 0">
+        Канал «SMS» при входе шлёт код через Plusofon. Пустые поля — берётся из .env;
+        если не задано, используется запасной шлюз SMS.RU.
+      </p>
+    </div>
+  </div>
+
   <!-- SMS.RU — резервная отправка кода по SMS -->
   <div class="adm-card" style="margin-bottom:1rem">
-    <div class="adm-card-title">SMS.RU — резервная отправка кода (если i-dgtl не задан)</div>
+    <div class="adm-card-title">SMS.RU — резервная отправка кода (если Plusofon не задан)</div>
     <div class="adm-form">
       <div class="adm-field">
         <label>api_id <span style="color:#aaa;font-weight:400">— smsru_api_id (личный кабинет sms.ru → Настройки → API)</span></label>

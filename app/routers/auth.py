@@ -14,6 +14,7 @@ from app.services.jwt import create_access_token, decode_access_token
 from app.services.notifications import send_otp_code
 from app.services import idgtl
 from app.services import captcha
+from app.services import audit
 
 router = APIRouter(tags=["auth"])
 
@@ -22,6 +23,12 @@ OTP_MAX_ATTEMPTS = 5
 OTP_RESEND_COOLDOWN = 60     # не чаще одного кода в 60с на номер (антифлуд)
 JWT_COOKIE = "vkusno_token"
 JWT_TTL_DAYS = 30
+
+# Каналы, которые отправляются через i-dgtl (платный агрегатор). Пусто = i-dgtl
+# не используется ни для одного канала. ВНИМАНИЕ: вход через Telegram идёт НЕ
+# отсюда, а напрямую через TG Gateway в send_otp_code() (channel == tg) — поэтому
+# OtpChannel.tg сюда добавлять НЕ нужно, иначе он уйдёт в i-dgtl вместо Gateway.
+ENABLED_PAID_CHANNELS: set[OtpChannel] = set()
 
 
 # ─── Схемы ────────────────────────────────────────────────────────────────────
@@ -62,12 +69,18 @@ def _gen_code() -> str:
 
 @router.post("/send-otp")
 async def send_otp(payload: SendOtpIn, request: Request, db: AsyncSession = Depends(get_db)):
+    ip = audit.client_ip(request)
+
+    # Rate-limit по IP: не больше 10 запросов кода за 5 минут с одного адреса.
+    if audit.rate_limited(f"otp_send:{ip}", limit=10, window_sec=300):
+        await audit.log_event(db, request, "otp_send", "blocked", "rate limit IP")
+        raise HTTPException(status_code=429, detail="Слишком много запросов. Попробуйте позже.")
+
     phone = _normalize_phone(payload.phone)
 
     # Антибот: проверяем токен SmartCaptcha (если капча настроена — иначе пропуск).
-    client_ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-                 or (request.client.host if request.client else None))
-    if not await captcha.verify(payload.captcha_token, client_ip):
+    if not await captcha.verify(payload.captcha_token, ip):
+        await audit.log_event(db, request, "otp_send", "fail", "captcha")
         raise HTTPException(status_code=400, detail="Не пройдена проверка «я не робот». Обновите страницу.")
 
     try:
@@ -91,6 +104,7 @@ async def send_otp(payload: SendOtpIn, request: Request, db: AsyncSession = Depe
         elapsed = (datetime.utcnow() - issued_at).total_seconds()
         if elapsed < OTP_RESEND_COOLDOWN:
             wait = int(OTP_RESEND_COOLDOWN - elapsed) + 1
+            await audit.log_event(db, request, "otp_send", "blocked", f"cooldown {phone}")
             raise HTTPException(
                 status_code=429,
                 detail=f"Запросить новый код можно через {wait} с",
@@ -105,8 +119,9 @@ async def send_otp(payload: SendOtpIn, request: Request, db: AsyncSession = Depe
     expires = datetime.utcnow() + timedelta(seconds=OTP_TTL_SECONDS)
 
     # ── Путь 1: внешний верификатор i-dgtl (SMS / Telegram Gateway). Провайдер
-    #    сам генерирует, шлёт и проверяет код — мы храним только его uuid. ──
-    if idgtl.is_supported(channel) and await idgtl.is_configured():
+    #    сам генерирует, шлёт и проверяет код — мы храним только его uuid.
+    #    Работает только для каналов из ENABLED_PAID_CHANNELS (защита от затрат). ──
+    if channel in ENABLED_PAID_CHANNELS and idgtl.is_supported(channel) and await idgtl.is_configured():
         uuid = await idgtl.idgtl_send(phone, channel)
         if uuid:
             otp = OtpCode(
@@ -118,8 +133,10 @@ async def send_otp(payload: SendOtpIn, request: Request, db: AsyncSession = Depe
             )
             db.add(otp)
             await db.commit()
+            await audit.log_event(db, request, "otp_send", "ok", f"{channel.value} {phone}")
             return {"status": "sent", "expires_in": OTP_TTL_SECONDS, "channel": channel.value}
         # i-dgtl настроен, но отправка не удалась — отдаём явную ошибку
+        await audit.log_event(db, request, "otp_send", "fail", f"i-dgtl {phone}")
         raise HTTPException(status_code=502, detail="Не удалось отправить код. Попробуйте позже.")
 
     # ── Путь 2: код генерируем сами (каналы-заглушки MAX/VK либо i-dgtl не
@@ -135,6 +152,8 @@ async def send_otp(payload: SendOtpIn, request: Request, db: AsyncSession = Depe
     await db.commit()
 
     delivered = await send_otp_code(phone=phone, code=code, channel=channel)
+    await audit.log_event(db, request, "otp_send", "ok" if delivered else "fail",
+                          f"{channel.value} {phone}{'' if delivered else ' (не доставлен)'}")
 
     resp = {"status": "sent", "expires_in": OTP_TTL_SECONDS, "channel": channel.value}
     if not delivered:
@@ -144,7 +163,13 @@ async def send_otp(payload: SendOtpIn, request: Request, db: AsyncSession = Depe
 
 
 @router.post("/verify-otp")
-async def verify_otp(payload: VerifyOtpIn, response: Response, db: AsyncSession = Depends(get_db)):
+async def verify_otp(payload: VerifyOtpIn, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    ip = audit.client_ip(request)
+    # Rate-limit перебора кода: не больше 20 проверок за 5 минут с одного IP.
+    if audit.rate_limited(f"otp_verify:{ip}", limit=20, window_sec=300):
+        await audit.log_event(db, request, "otp_verify", "blocked", "rate limit IP")
+        raise HTTPException(status_code=429, detail="Слишком много попыток. Попробуйте позже.")
+
     phone = _normalize_phone(payload.phone)
     code_hash = _hash_code(payload.code.strip())
     now = datetime.utcnow()
@@ -171,6 +196,7 @@ async def verify_otp(payload: VerifyOtpIn, response: Response, db: AsyncSession 
         if status == "CONFIRMED":
             otp.used = True
         elif status == "WRONG_CODE":
+            await audit.log_event(db, request, "otp_verify", "fail", f"wrong code {phone}")
             raise HTTPException(status_code=400, detail="Неверный код")
         elif status in ("EXPIRED", "NOT_FOUND"):
             otp.used = True
@@ -186,6 +212,7 @@ async def verify_otp(payload: VerifyOtpIn, response: Response, db: AsyncSession 
         if otp.code_hash != code_hash:
             otp.attempts += 1
             await db.commit()
+            await audit.log_event(db, request, "otp_verify", "fail", f"wrong code {phone}")
             left = OTP_MAX_ATTEMPTS - otp.attempts
             raise HTTPException(status_code=400, detail=f"Неверный код. Осталось попыток: {left}")
 
@@ -205,6 +232,7 @@ async def verify_otp(payload: VerifyOtpIn, response: Response, db: AsyncSession 
     user.phone_verified_via = otp.channel.value
 
     await db.commit()
+    await audit.log_event(db, request, "login", "ok", phone, user_id=user.id)
 
     token = create_access_token({"sub": str(user.id), "phone": phone}, days=JWT_TTL_DAYS)
 

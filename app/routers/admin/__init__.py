@@ -3,7 +3,7 @@ import io
 import logging
 import os
 import uuid
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Optional
 
 from PIL import Image as PILImage
@@ -16,17 +16,44 @@ from sqlalchemy import func, select, update, or_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from fastapi import Cookie
+
+from app.config import settings
 from app.database import get_db
 from app.models import (
-    AdminUser, Category, CashbackAccount, CashbackTransaction, CashbackTxType,
+    AdminUser, AuditEvent, Category, CashbackAccount, CashbackTransaction, CashbackTxType,
     DeliveryZone, Order, OrderItem,
     OrderStatus, PaymentMethod, PaymentStatus, Product, ProductGroup, ProductImage,
     Promocode, PromoType, ScheduleEntry, ScheduleEntryType, SiteSetting, Story, StorySlide, User,
 )
 from app.services.notifications import notify_order_status
+from app.services import admin_auth
+from app.services import audit
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["admin"])
+
+
+# ─── Гард доступа ─────────────────────────────────────────────────────────────
+# Любой /admin/* без валидной сессии → 404 (админка полностью скрыта от чужих).
+async def require_admin(
+    vkusno_admin: str | None = Cookie(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> AdminUser:
+    admin_id = admin_auth.decode_admin_session(vkusno_admin)
+    if admin_id is not None:
+        admin = (
+            await db.execute(select(AdminUser).where(AdminUser.id == admin_id))
+        ).scalar_one_or_none()
+        if admin and admin.is_active:
+            return admin
+    # маскируемся под обычный 404 — никаких признаков существования админки
+    raise HTTPException(status_code=404, detail="Not Found")
+
+
+# Основной роутер админки — закрыт гардом целиком.
+router = APIRouter(tags=["admin"], dependencies=[Depends(require_admin)])
+# Роутер входа/выхода — БЕЗ гарда (иначе на страницу логина не попасть).
+auth_router = APIRouter(tags=["admin-auth"])
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["intcomma"] = lambda v: f"{int(v):,}".replace(",", " ")
 templates.env.filters["abs"] = abs
@@ -73,6 +100,64 @@ def _r(path: str) -> RedirectResponse:
 
 def _tmpl(name: str, request: Request, ctx: dict):
     return templates.TemplateResponse(name, {"request": request, **_CTX, **ctx})
+
+
+# ─── Вход / выход (без гарда) ─────────────────────────────────────────────────
+
+@auth_router.get("/login/{secret}", response_class=HTMLResponse)
+async def admin_login_form(secret: str, request: Request):
+    """Страница входа доступна ТОЛЬКО по секретному префиксу; иначе 404."""
+    if not admin_auth.secret_matches(secret):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return _tmpl("admin/login.html", request, {"secret": secret, "error": None})
+
+
+@auth_router.post("/login/{secret}", response_class=HTMLResponse)
+async def admin_login_submit(
+    secret: str,
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    if not admin_auth.secret_matches(secret):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    ip = audit.client_ip(request)
+    # Rate-limit перебора пароля: не больше 10 попыток за 5 минут с одного IP.
+    if audit.rate_limited(f"admin_login:{ip}", limit=10, window_sec=300):
+        await audit.log_event(db, request, "admin_login", "blocked", "rate limit IP")
+        raise HTTPException(status_code=429, detail="Слишком много попыток. Попробуйте позже.")
+
+    admin = (
+        await db.execute(select(AdminUser).where(AdminUser.username == username))
+    ).scalar_one_or_none()
+    if not admin or not admin.is_active or not admin_auth.verify_password(password, admin.password_hash):
+        await audit.log_event(db, request, "admin_login", "fail", f"user={username[:40]}")
+        return _tmpl("admin/login.html", request,
+                     {"secret": secret, "error": "Неверный логин или пароль"})
+
+    admin.last_login = datetime.utcnow()
+    await db.commit()
+    await audit.log_event(db, request, "admin_login", "ok", f"user={username[:40]}", user_id=admin.id)
+
+    resp = _r("/admin")
+    resp.set_cookie(
+        key=admin_auth.ADMIN_COOKIE,
+        value=admin_auth.create_admin_session(admin.id),
+        httponly=True,
+        max_age=admin_auth.ADMIN_SESSION_DAYS * 86400,
+        samesite="lax",
+        secure=False,   # True на проде с HTTPS
+    )
+    return resp
+
+
+@auth_router.get("/logout")
+async def admin_logout():
+    resp = _r(f"/admin/login/{settings.ADMIN_URL_SECRET}" if settings.ADMIN_URL_SECRET else "/")
+    resp.delete_cookie(admin_auth.ADMIN_COOKIE)
+    return resp
 
 
 # ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -993,6 +1078,47 @@ async def admin_schedule_preview(db: AsyncSession = Depends(get_db)):
 # ─── Settings ─────────────────────────────────────────────────────────────────
 
 _CHECKBOX_KEYS = {"metrika_webvisor", "metrika_ecom", "smsru_test"}
+
+
+@router.get("/audit", response_class=HTMLResponse)
+async def admin_audit(
+    request: Request,
+    ip: str = "", action: str = "", status: str = "", page: int = 1,
+    db: AsyncSession = Depends(get_db),
+):
+    """Журнал важных действий: вход/код/админка. Фильтры по IP/действию/статусу."""
+    stmt = select(AuditEvent)
+    if ip:
+        stmt = stmt.where(AuditEvent.ip.ilike(f"%{ip}%"))
+    if action:
+        stmt = stmt.where(AuditEvent.action == action)
+    if status:
+        stmt = stmt.where(AuditEvent.status == status)
+
+    total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar() or 0
+    events = (await db.execute(
+        stmt.order_by(desc(AuditEvent.id)).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
+    )).scalars().all()
+
+    # Топ IP по активности за последние 24 часа
+    since = datetime.utcnow() - timedelta(hours=24)
+    top_ip = (await db.execute(
+        select(AuditEvent.ip, func.count().label("cnt"))
+        .where(AuditEvent.created_at >= since)
+        .group_by(AuditEvent.ip)
+        .order_by(desc("cnt"))
+        .limit(10)
+    )).all()
+
+    return _tmpl("admin/audit.html", request, {
+        "active": "audit",
+        "events": events,
+        "total": total,
+        "page": page,
+        "pages": (total + PAGE_SIZE - 1) // PAGE_SIZE,
+        "f_ip": ip, "f_action": action, "f_status": status,
+        "top_ip": [(r[0], r[1]) for r in top_ip],
+    })
 
 
 @router.get("/settings", response_class=HTMLResponse)

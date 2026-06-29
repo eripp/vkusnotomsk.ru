@@ -898,13 +898,6 @@ img { display: block; max-width: 100%; }
   gap: 12px;
 }
 
-.acct-avatar {
-  font-size: 48px;
-  width: 72px; height: 72px;
-  background: #f5f5f3;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-}
 .acct-phone { font-size: 13px; color: #888; font-weight: 600; }
 
 .acct-nav { width: 100%; display: flex; flex-direction: column; gap: 4px; }
@@ -977,15 +970,38 @@ img { display: block; max-width: 100%; }
 .acct-order-date  { font-size: 13px; color: #888; margin-left: auto; }
 .acct-order-total { font-size: 16px; font-weight: 800; }
 .acct-order-addr  { font-size: 13px; color: #666; margin-bottom: 8px; }
-.acct-order-items { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.acct-order-item  {
-  font-size: 12px;
-  background: #f5f5f3;
-  border-radius: 6px;
-  padding: 3px 8px;
-  color: #555;
-}
 .acct-order-pay { font-size: 12px; color: #aaa; }
+
+/* Раскрываемые детали заказа */
+.acct-order-head { cursor: pointer; user-select: none; }
+.acct-order-toggle { font-size: 11px; color: #999; width: 12px; flex-shrink: 0; }
+.acct-order-details {
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;
+}
+.acct-order-table {
+  width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 10px;
+}
+.acct-order-table th {
+  text-align: left; font-weight: 600; color: #999; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .03em; padding: 4px 8px;
+  border-bottom: 1px solid #eee;
+}
+.acct-order-table th:nth-child(2), .acct-order-table th:nth-child(3), .acct-order-table th:nth-child(4),
+.acct-order-table td:nth-child(2), .acct-order-table td:nth-child(3), .acct-order-table td:nth-child(4) {
+  text-align: right; white-space: nowrap;
+}
+.acct-order-table td { padding: 6px 8px; border-bottom: 1px solid #f4f4f2; }
+.acct-order-sums { max-width: 320px; margin-left: auto; }
+.acct-sum-row {
+  display: flex; justify-content: space-between; font-size: 13px;
+  padding: 3px 8px; color: #555;
+}
+.acct-sum-minus span:last-child { color: #d00; }
+.acct-sum-total {
+  font-weight: 800; font-size: 15px; color: #1a1a18;
+  border-top: 1px solid #eee; margin-top: 4px; padding-top: 8px;
+}
+.acct-sum-cb span:last-child { color: #1a7a1a; }
 
 /* Кешбэк */
 .acct-cashback-balance {

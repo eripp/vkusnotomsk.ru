@@ -1,6 +1,8 @@
-// ─── Корзина (localStorage) ──────────────────────────────────────────────────
+// ─── Корзина (localStorage + серверная синхронизация для залогиненных) ────────
 const cart = {
   _key: 'vkusno_cart',
+  _loggedIn: false,        // выставляется после проверки /api/auth/me
+  _syncTimer: null,
 
   get items() {
     try { return JSON.parse(localStorage.getItem(this._key) || '[]'); }
@@ -10,6 +12,54 @@ const cart = {
   _save(items) {
     localStorage.setItem(this._key, JSON.stringify(items));
     this._render();
+    this._syncToServer();   // у залогиненного — пушим изменения на сервер (debounce)
+  },
+
+  // Полностью заменяет локальную корзину (без повторного пуша на сервер).
+  _setItemsLocal(items) {
+    localStorage.setItem(this._key, JSON.stringify(items || []));
+    this._render();
+  },
+
+  // ── Серверная синхронизация ──────────────────────────────────────────────
+  _syncToServer() {
+    if (!this._loggedIn) return;
+    clearTimeout(this._syncTimer);
+    this._syncTimer = setTimeout(() => {
+      const payload = { items: this.items.map(i => ({ id: i.id, qty: i.qty })) };
+      fetch('/api/cart/items', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }, 500);
+  },
+
+  // Вызывается после успешного входа. Правила:
+  //  • локальная непустая → она побеждает, пушим её на сервер;
+  //  • локальная пустая → подтягиваем серверную в localStorage.
+  async mergeOnLogin() {
+    this._loggedIn = true;
+    const local = this.items;
+    try {
+      if (local.length > 0) {
+        const r = await fetch('/api/cart/items', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: local.map(i => ({ id: i.id, qty: i.qty })) }),
+        });
+        if (r.ok) { const d = await r.json(); this._setItemsLocal(d.items); }
+      } else {
+        const r = await fetch('/api/cart/items');
+        if (r.ok) { const d = await r.json(); this._setItemsLocal(d.items); }
+      }
+    } catch { /* офлайн — оставляем локальную как есть */ }
+  },
+
+  // Вызывается при выходе: очищаем корзину в браузере.
+  clearOnLogout() {
+    this._loggedIn = false;
+    this._setItemsLocal([]);
   },
 
   addFromBtn(btn) {
@@ -169,4 +219,10 @@ const cartDrawer = {
 };
 
 // Инициализация при загрузке
-document.addEventListener('DOMContentLoaded', () => cart._render());
+document.addEventListener('DOMContentLoaded', () => {
+  cart._render();
+  // Узнаём, залогинен ли пользователь; если да — подтягиваем/мерджим серверную корзину.
+  fetch('/api/auth/me')
+    .then(r => { if (r.ok) cart.mergeOnLogin(); })
+    .catch(() => {});
+});

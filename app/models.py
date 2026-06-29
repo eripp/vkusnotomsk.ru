@@ -4,7 +4,7 @@ from typing import Optional
 
 from sqlalchemy import (
     Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric,
-    String, Text, Time, BigInteger, JSON, func,
+    String, Text, Time, BigInteger, JSON, UniqueConstraint, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -183,6 +183,34 @@ class OtpCode(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     used: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class CartItem(Base):
+    """Серверная корзина залогиненного пользователя. Хранит только product_id+qty;
+    имя/цена/фото берутся из Product при чтении (без устаревших снапшотов)."""
+    __tablename__ = "cart_items"
+    __table_args__ = (UniqueConstraint("user_id", "product_id", name="uq_cart_user_product"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int] = mapped_column(Integer, ForeignKey("products.id", ondelete="CASCADE"))
+    qty: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class AuditEvent(Base):
+    """Аудит важных действий: вход/отправка кода, админка, заказы, оплата.
+    Только значимые события (не каждый HTTP-запрос) — IP + действие + результат."""
+    __tablename__ = "audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ip: Mapped[str] = mapped_column(String(45), index=True)        # IPv4/IPv6
+    action: Mapped[str] = mapped_column(String(40), index=True)    # напр. otp_send, admin_login
+    status: Mapped[str] = mapped_column(String(20), default="ok")  # ok | fail | blocked
+    detail: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    path: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
 
 class NotificationSettings(Base):

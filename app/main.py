@@ -11,7 +11,7 @@ mimetypes.add_type("image/webp", ".webp")
 from app.routers import catalog, cart, auth, account, schedule, zones, stories
 from app.routers.payment import router as payment_router, pages_router as payment_pages_router
 from app.routers.orders import router as orders_router, pages_router as orders_pages_router
-from app.routers.admin import router as admin_router
+from app.routers.admin import router as admin_router, auth_router as admin_auth_router
 from app.routers.tgbot import router as tgbot_router
 from app.config import settings
 from app.templates_env import templates
@@ -20,6 +20,19 @@ app = FastAPI(title="Vkusno Tomsk", docs_url=None, redoc_url=None)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.mount("/media", StaticFiles(directory="media"), name="media")
+
+
+@app.on_event("startup")
+async def _seed_admin_user():
+    """Засеваем учётку администратора из .env при запуске."""
+    from app.services.admin_auth import seed_admin
+    from app.database import AsyncSessionLocal
+    try:
+        async with AsyncSessionLocal() as db:
+            await seed_admin(db)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("[admin] сидинг не выполнен: %s", exc)
 
 
 @app.middleware("http")
@@ -105,5 +118,6 @@ app.include_router(payment_router, prefix="/api/payment")   # /api/payment/callb
 app.include_router(schedule.router, prefix="/api/schedule")
 app.include_router(zones.router, prefix="/api")
 app.include_router(stories.router, prefix="/api")
-app.include_router(admin_router, prefix="/admin")
+app.include_router(admin_auth_router, prefix="/admin")   # /admin/login/{secret}, /logout — без гарда
+app.include_router(admin_router, prefix="/admin")        # остальная админка — под гардом
 app.include_router(tgbot_router, prefix="/api")    # /api/tg/webhook

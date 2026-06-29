@@ -24,11 +24,11 @@
     </div>
     <p class="co-hint auth-channel-hint">Куда отправить код:</p>
     <div class="auth-channels" id="aw2-channels">
-      <button type="button" class="auth-channel active" data-channel="sms" onclick="acctAuth.pickChannel('sms')">
-        <img src="/static/img/sms_logo.svg" alt="" class="auth-channel-ico"><span>SMS</span>
-      </button>
-      <button type="button" class="auth-channel" data-channel="tg" onclick="acctAuth.pickChannel('tg')">
+      <button type="button" class="auth-channel active" data-channel="tg" onclick="acctAuth.pickChannel('tg')">
         <img src="/static/img/telegram_logo.svg" alt="" class="auth-channel-ico"><span>Telegram</span>
+      </button>
+      <button type="button" class="auth-channel" data-channel="sms" onclick="acctAuth.pickChannel('sms')">
+        <img src="/static/img/sms_logo.svg" alt="" class="auth-channel-ico"><span>SMS</span>
       </button>
       <button type="button" class="auth-channel" data-channel="max" disabled aria-disabled="true">
         <img src="/static/img/max_logo.svg" alt="" class="auth-channel-ico"><span>MAX</span>
@@ -57,13 +57,12 @@
 
     <!-- Сайдбар -->
     <aside class="acct-sidebar">
-      <div class="acct-avatar" id="acct-avatar">👤</div>
       <div class="acct-phone" id="acct-phone"></div>
       <nav class="acct-nav">
-        <button class="acct-nav-item active" data-tab="orders" onclick="acct.showTab('orders')">📋 Заказы</button>
-        <button class="acct-nav-item" data-tab="profile" onclick="acct.showTab('profile')">✏️ Профиль</button>
-        <button class="acct-nav-item" data-tab="cashback" onclick="acct.showTab('cashback')">💰 Кешбэк</button>
-        <button class="acct-nav-item" data-tab="notifications" onclick="acct.showTab('notifications')">🔔 Уведомления</button>
+        <button class="acct-nav-item active" data-tab="orders" onclick="acct.showTab('orders')">Заказы</button>
+        <button class="acct-nav-item" data-tab="profile" onclick="acct.showTab('profile')">Профиль</button>
+        <button class="acct-nav-item" data-tab="cashback" onclick="acct.showTab('cashback')">Кешбэк</button>
+        <button class="acct-nav-item" data-tab="notifications" onclick="acct.showTab('notifications')">Уведомления</button>
       </nav>
       <button class="acct-logout" onclick="acct.logout()">Выйти</button>
     </aside>
@@ -129,7 +128,6 @@
             <label class="acct-toggle"><input type="checkbox" id="n-tg-orders"><span>Статус заказа</span></label>
             <label class="acct-toggle"><input type="checkbox" id="n-tg-promo"><span>Акции и новинки</span></label>
             <div style="margin-top:10px">
-              <button class="btn-secondary" id="tg-link-btn" onclick="acct.linkTelegram()" style="font-size:13px;padding:6px 14px">Привязать Telegram</button>
               <button class="btn-secondary" id="tg-unlink-btn" onclick="acct.unlinkTelegram()" style="font-size:13px;padding:6px 14px;display:none;background:#888">Отвязать</button>
             </div>
           </div>
@@ -200,23 +198,55 @@ const acct = {
         el.innerHTML = '<p style="color:#aaa;padding:20px 0">Заказов пока нет</p>';
         return;
       }
+      const rub = n => (n || 0).toLocaleString('ru') + ' ₽';
+      const goodsTotal = o => o.items.reduce((s, i) => s + i.line_total, 0);
       el.innerHTML = orders.map(o => `
-        <div class="acct-order">
-          <div class="acct-order-head">
+        <div class="acct-order" data-order="${o.id}">
+          <div class="acct-order-head" onclick="acct.toggleOrder(${o.id})">
+            <span class="acct-order-toggle" id="ord-arrow-${o.id}">▸</span>
             <span class="acct-order-num">#${o.id}</span>
             <span class="acct-order-status acct-status-${o.status}">${STATUS_LABELS[o.status] || o.status}</span>
             <span class="acct-order-date">${o.delivery_date} ${o.slot_start}–${o.slot_end}</span>
-            <span class="acct-order-total">${o.total_amount.toLocaleString('ru')} ₽</span>
+            <span class="acct-order-total">${rub(o.total_amount)}</span>
           </div>
           <div class="acct-order-addr">${esc(o.address)}</div>
-          <div class="acct-order-items">
-            ${o.items.map(i => `<span class="acct-order-item">${esc(i.product_name)} ×${i.quantity}</span>`).join('')}
-          </div>
           <div class="acct-order-pay">${PAY_LABELS[o.payment_method] || o.payment_method}</div>
+
+          <div class="acct-order-details" id="ord-details-${o.id}" style="display:none">
+            <table class="acct-order-table">
+              <thead><tr><th>Позиция</th><th>Цена</th><th>Кол-во</th><th>Сумма</th></tr></thead>
+              <tbody>
+                ${o.items.map(i => `
+                  <tr>
+                    <td>${esc(i.product_name)}</td>
+                    <td>${rub(i.product_price)}</td>
+                    <td>×${i.quantity}</td>
+                    <td>${rub(i.line_total)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+            <div class="acct-order-sums">
+              <div class="acct-sum-row"><span>Товары</span><span>${rub(goodsTotal(o))}</span></div>
+              <div class="acct-sum-row"><span>Доставка</span><span>${o.delivery_price ? rub(o.delivery_price) : 'бесплатно'}</span></div>
+              ${o.discount_amount ? `<div class="acct-sum-row acct-sum-minus"><span>Скидка</span><span>−${rub(o.discount_amount)}</span></div>` : ''}
+              ${o.cashback_spent ? `<div class="acct-sum-row acct-sum-minus"><span>Списано кешбэка</span><span>−${rub(o.cashback_spent)}</span></div>` : ''}
+              <div class="acct-sum-row acct-sum-total"><span>Итого</span><span>${rub(o.total_amount)}</span></div>
+              ${o.cashback_earned ? `<div class="acct-sum-row acct-sum-cb"><span>Начислено кешбэка</span><span>+${rub(o.cashback_earned)}</span></div>` : ''}
+            </div>
+          </div>
         </div>`).join('');
     } catch {
       el.innerHTML = '<p class="co-error">Ошибка загрузки</p>';
     }
+  },
+
+  toggleOrder(id) {
+    const d = document.getElementById('ord-details-' + id);
+    const a = document.getElementById('ord-arrow-' + id);
+    if (!d) return;
+    const open = d.style.display === 'none';
+    d.style.display = open ? '' : 'none';
+    if (a) a.textContent = open ? '▾' : '▸';
   },
 
   async _loadCashback() {
@@ -257,7 +287,6 @@ const acct = {
       const tgLinked = !!this._user?.tg_chat_id;
       document.getElementById('tg-status').textContent = tgLinked ? '✓ привязан' : 'не привязан';
       document.getElementById('tg-status').style.color = tgLinked ? '#1a7a1a' : '#888';
-      document.getElementById('tg-link-btn').style.display   = tgLinked ? 'none' : '';
       document.getElementById('tg-unlink-btn').style.display = tgLinked ? '' : 'none';
     } catch { /* silent */ }
   },
@@ -283,7 +312,6 @@ const acct = {
       this._user.tg_chat_id = null;
       document.getElementById('tg-status').textContent = 'не привязан';
       document.getElementById('tg-status').style.color = '#888';
-      document.getElementById('tg-link-btn').style.display   = '';
       document.getElementById('tg-unlink-btn').style.display = 'none';
       _showMsg('n-msg', '✓ Telegram отвязан');
     } catch {
@@ -336,6 +364,7 @@ const acct = {
   async logout() {
     await fetch('/api/account/logout', { method: 'POST' });
     localStorage.removeItem('vkusno_user');
+    cart.clearOnLogout();   // очищаем корзину в браузере при выходе
     window.location.href = '/';
   },
 };
@@ -343,7 +372,7 @@ const acct = {
 // ─── Auth wall для /account ───────────────────────────────────────────────────
 const acctAuth = {
   _timer: null,
-  channel: 'sms',
+  channel: 'tg',
   _capWidgetId: null, _capSitekey: null, _capResolve: null,
 
   pickChannel(ch) {
@@ -442,9 +471,11 @@ const acctAuth = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, code }),
       });
-      if (!res.ok) throw new Error((await res.json()).detail);
       const data = await res.json();
+      if (!res.ok) throw new Error(data.detail);
       if (data.user) localStorage.setItem('vkusno_user', JSON.stringify(data.user));
+      // мерджим корзину (локальная побеждает, иначе подтягиваем серверную)
+      try { await cart.mergeOnLogin(); } catch {}
       document.getElementById('acct-auth-wall').style.display = 'none';
       acct.init();
     } catch (e) {
