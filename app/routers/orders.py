@@ -8,12 +8,12 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from app.database import get_db
 from app.models import (
     Order, OrderItem, OrderStatus, PaymentMethod, PaymentStatus,
-    Product, DeliveryZone, User, Promocode, PendingOrder,
+    Product, DeliveryZone, User, Promocode, PendingOrder, CartItem,
 )
 from app.services.zones import find_zone
 from app.services.dadata import suggest_address, geocode_reverse
@@ -106,6 +106,10 @@ async def _materialize_order(db: AsyncSession, data: dict, paid: bool) -> Order:
         pr = (await db.execute(select(Promocode).where(Promocode.id == data["promocode_id"]))).scalar_one_or_none()
         if pr:
             pr.usage_count += 1
+
+    # очищаем серверную корзину пользователя — заказ оформлен
+    if order.user_id:
+        await db.execute(delete(CartItem).where(CartItem.user_id == order.user_id))
 
     await db.commit()
 

@@ -62,6 +62,20 @@ const cart = {
     this._setItemsLocal([]);
   },
 
+  // Вызывается после успешного оформления заказа: чистим локальную корзину
+  // И серверную (иначе mergeOnLogin вернёт её при следующей загрузке).
+  // _skipMerge не даёт подтянуть серверную корзину обратно на этой же странице.
+  clearAfterOrder() {
+    this._skipMerge = true;
+    this._setItemsLocal([]);
+    // на всякий случай пушим пустую и на сервер (бэкенд тоже чистит при заказе)
+    fetch('/api/cart/items', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [] }),
+    }).catch(() => {});
+  },
+
   addFromBtn(btn) {
     const b = btn.closest('[data-id]') || btn;
     this.add(
@@ -81,7 +95,7 @@ const cart = {
     this._save(items);
     this._animateBtn(id);
     window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push({ ecommerce: { add: { products: [{ id, name, price, quantity: 1 }] } } });
+    window.dataLayer.push({ ecommerce: { currencyCode: 'RUB', add: { products: [{ id: String(id), name, price, quantity: 1 }] } } });
   },
 
   dec(id) {
@@ -95,7 +109,7 @@ const cart = {
     this._save(items);
     if (wasLast) {
       window.dataLayer = window.dataLayer || [];
-      window.dataLayer.push({ ecommerce: { remove: { products: [{ id: item.id, name: item.name, price: item.price, quantity: 1 }] } } });
+      window.dataLayer.push({ ecommerce: { currencyCode: 'RUB', remove: { products: [{ id: String(item.id), name: item.name, price: item.price, quantity: 1 }] } } });
     }
   },
 
@@ -222,6 +236,8 @@ const cartDrawer = {
 document.addEventListener('DOMContentLoaded', () => {
   cart._render();
   // Узнаём, залогинен ли пользователь; если да — подтягиваем/мерджим серверную корзину.
+  // На странице успешного заказа merge пропускаем (корзина только что очищена).
+  if (cart._skipMerge) return;
   fetch('/api/auth/me')
     .then(r => { if (r.ok) cart.mergeOnLogin(); })
     .catch(() => {});

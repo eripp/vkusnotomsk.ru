@@ -224,7 +224,7 @@ const productModal = {
       this._initGallery(p.images || []);
       _pmUpdateCounter(p.id);
       window.dataLayer = window.dataLayer || [];
-      window.dataLayer.push({ ecommerce: { detail: { products: [{ id: p.id, name: p.name, price: p.price }] } } });
+      window.dataLayer.push({ ecommerce: { currencyCode: 'RUB', detail: { products: [{ id: String(p.id), name: p.name, price: p.price }] } } });
     } catch {
       document.getElementById('modal-content').innerHTML =
         '<div style="padding:40px;text-align:center;color:#aaa">Товар не найден</div>';
@@ -420,12 +420,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.closest('a[href="/checkout"]')) {
       const items = cart.items;
       if (!items.length) return;
+      // Примечание: у Яндекс.Метрики нет действия "checkout" (только detail/add/
+      // remove/purchase) — это Google-совместимое событие, Яндекс его игнорирует.
       window.dataLayer = window.dataLayer || [];
       window.dataLayer.push({
         ecommerce: {
+          currencyCode: 'RUB',
           checkout: {
             actionField: { step: 1 },
-            products: items.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.qty })),
+            products: items.map(i => ({ id: String(i.id), name: i.name, price: i.price, quantity: i.qty })),
           },
         },
       });

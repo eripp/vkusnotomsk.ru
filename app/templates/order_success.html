@@ -45,20 +45,21 @@
 window.dataLayer = window.dataLayer || [];
 window.dataLayer.push({
   ecommerce: {
+    currencyCode: "RUB",
     purchase: {
       actionField: {
         id: "{{ order.id }}",
-        revenue: "{{ order.total_amount }}"
+        revenue: {{ order.total_amount }}
       },
       products: [
         {% for item in items %}
-        { id: {{ item.product_id }}, name: {{ item.product_name | tojson }}, price: "{{ item.product_price }}", quantity: {{ item.quantity }} }{% if not loop.last %},{% endif %}
+        { id: "{{ item.product_id }}", name: {{ item.product_name | tojson }}, price: {{ item.product_price }}, quantity: {{ item.quantity }} }{% if not loop.last %},{% endif %}
         {% endfor %}
       ]
     }
   }
 });
-// Очищаем корзину после успешного заказа
-localStorage.removeItem('vkusno_cart');
+// Очищаем корзину после успешного заказа (локально + серверную; без обратного merge)
+cart.clearAfterOrder();
 </script>
 {% endblock %}
