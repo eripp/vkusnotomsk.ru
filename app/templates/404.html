@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Страница не найдена · {{ site_name(request) }}{% endblock %}
+{% block robots %}noindex, follow{% endblock %}
+
+{% block body %}
+<header class="header">
+  <div class="header-inner">
+    <button class="burger-btn" id="burger-btn" aria-label="Меню" onclick="navPanel.open()"><span></span><span></span><span></span></button>
+    <a href="/" class="logo"><img src="/static/img/logo.svg" alt="{{ site_name(request) }}"></a>
+    <a href="/" class="checkout-back">← В меню</a>
+  </div>
+</header>
+
+<main class="err-page">
+  <div class="err-code">404</div>
+  <p class="err-text">Такой страницы нет или она была перемещена.</p>
+  <a href="/" class="btn-primary">На главную</a>
+</main>
+{% endblock %}

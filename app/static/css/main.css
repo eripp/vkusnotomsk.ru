@@ -915,7 +915,7 @@ img { display: block; max-width: 100%; }
   transition: background .12s, color .12s;
 }
 .acct-nav-item:hover { background: #f5f5f3; }
-.acct-nav-item.active { background: #fff5f2; color: var(--brand); font-weight: 700; }
+.acct-nav-item.active { color: var(--brand); font-weight: 700; }
 
 .acct-logout {
   margin-top: 8px;
@@ -1293,3 +1293,16 @@ svg.leaflet-attribution-flag { display: none !important; }
   .cookie-banner { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px; }
   .cookie-accept { width: 100%; }
 }
+
+/* ─── Страница 404 ───────────────────────────────────────────────────────── */
+.err-page {
+  min-height: calc(100vh - 56px); padding: 40px 20px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
+}
+.err-code {
+  font-size: 96px; font-weight: 800; line-height: 1;
+  color: var(--brand); margin-bottom: 12px;
+}
+.err-text { font-size: 16px; color: #666; margin-bottom: 24px; max-width: 420px; }
+.err-page .btn-primary { display: inline-block; padding: 12px 28px; text-decoration: none; }

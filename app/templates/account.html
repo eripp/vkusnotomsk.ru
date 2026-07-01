@@ -85,10 +85,6 @@
             <input id="p-name" type="text" placeholder="Ваше имя">
           </div>
           <div class="co-field">
-            <label>Email</label>
-            <input id="p-email" type="email" placeholder="you@example.com">
-          </div>
-          <div class="co-field">
             <label>Телефон</label>
             <input id="p-phone" type="tel" disabled style="opacity:.5">
           </div>
@@ -173,7 +169,6 @@ const acct = {
     // профиль
     document.getElementById('p-phone').value = this._user.phone;
     document.getElementById('p-name').value  = this._user.name  || '';
-    document.getElementById('p-email').value = this._user.email || '';
 
     this.showTab('orders');
   },
@@ -322,7 +317,6 @@ const acct = {
   async saveProfile() {
     const body = {
       name:  document.getElementById('p-name').value.trim() || null,
-      email: document.getElementById('p-email').value.trim() || null,
     };
     try {
       const res = await fetch('/api/account/profile', {
@@ -362,6 +356,7 @@ const acct = {
   },
 
   async logout() {
+    if (!confirm('Выйти из личного кабинета?')) return;
     await fetch('/api/account/logout', { method: 'POST' });
     localStorage.removeItem('vkusno_user');
     cart.clearOnLogout();   // очищаем корзину в браузере при выходе

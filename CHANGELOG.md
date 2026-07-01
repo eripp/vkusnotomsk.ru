@@ -6,6 +6,26 @@
 
 ## [Unreleased]
 
+### 2026-07-01 — Страница 404 (вместо JSON)
+
+#### Added
+- **Кастомная 404-страница** (HTML, `templates/404.html`) вместо голого
+  `{"detail":"Not Found"}`. Обработчик отдаёт HTML для обычных URL и JSON для
+  `/api/*` и запросов с `Accept: application/json` (fetch не ломается).
+
+### 2026-07-01 — Продакшн + вынос статики/юр.страниц
+
+#### Added
+- **Прод-стек** `docker-compose.prod.yml` (проект `vkusno_prod`): отдельные БД
+  (`pgdata_prod`), media (`./media-prod`), web без reload, nginx :80/:443 + SSL
+  Let's Encrypt. Dev остаётся на :8000. `DEPLOY.md`, `.dockerignore`.
+- `COOKIE_SECURE` — secure-флаг cookies по окружению (dev=false / prod=true).
+- **SVG-иконки** пустых состояний (поиск, каталог, корзина) вместо эмодзи.
+
+#### Fixed
+- `alembic/env.py` читает `DATABASE_URL` из окружения (не хардкод пароля).
+- Сидинг админки игнорирует пароль-плейсхолдер `CHANGE_ME`.
+
 ### 2026-07-01 — Cookie-баннер + политика ПДн и оферта
 
 #### Added

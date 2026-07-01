@@ -2,7 +2,8 @@ import mimetypes
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # В slim-образе Python неполная база mimetypes — webp может отдаваться как
 # text/plain. Регистрируем явно (на проде статику отдаёт nginx).
@@ -20,6 +21,18 @@ app = FastAPI(title="Vkusno Tomsk", docs_url=None, redoc_url=None)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.mount("/media", StaticFiles(directory="media"), name="media")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """404 → HTML-страница для обычных URL, JSON для API. Остальные коды — как есть."""
+    wants_json = (
+        request.url.path.startswith("/api/")
+        or "application/json" in request.headers.get("accept", "")
+    )
+    if exc.status_code == 404 and not wants_json:
+        return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 
 @app.on_event("startup")
