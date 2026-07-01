@@ -130,6 +130,22 @@
     </div>
   </div>
 
+  <!-- Юридические страницы -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Политика конфиденциальности и оферта</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Политика конфиденциальности / ПДн <span style="color:#aaa;font-weight:400">— privacy_html (страница /privacy)</span></label>
+        <textarea name="privacy_html" rows="10" style="font-family:monospace;font-size:13px" placeholder="Пусто → показывается типовой текст по умолчанию (152-ФЗ, cookie, реквизиты из настроек)">{{ val('privacy_html') }}</textarea>
+      </div>
+      <div class="adm-field">
+        <label>Публичная оферта <span style="color:#aaa;font-weight:400">— offer_html (страница /offer)</span></label>
+        <textarea name="offer_html" rows="10" style="font-family:monospace;font-size:13px" placeholder="Пусто → показывается типовой текст по умолчанию">{{ val('offer_html') }}</textarea>
+      </div>
+      <span style="color:#aaa;font-size:12px">Пустое поле — используется типовой текст-шаблон. Проверьте и утвердите тексты у юриста.</span>
+    </div>
+  </div>
+
   <!-- Яндекс.Метрика -->
   <div class="adm-card" style="margin-bottom:1rem">
     <div class="adm-card-title">Яндекс.Метрика</div>

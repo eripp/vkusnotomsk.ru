@@ -280,6 +280,30 @@ async def contacts_page(request: Request):
     return templates.TemplateResponse("contacts_page.html", {"request": request})
 
 
+@router.get("/privacy", response_class=HTMLResponse)
+async def privacy_page(request: Request):
+    """Политика конфиденциальности / обработка ПДн / cookie."""
+    from app.services import legal
+    ss = getattr(request.state, "site_settings", {}) or {}
+    return templates.TemplateResponse("content_page.html", {
+        "request": request,
+        "page_title": "Политика конфиденциальности",
+        "page_html": ss.get("privacy_html") or legal.default_privacy_html(ss),
+    })
+
+
+@router.get("/offer", response_class=HTMLResponse)
+async def offer_page(request: Request):
+    """Публичная оферта."""
+    from app.services import legal
+    ss = getattr(request.state, "site_settings", {}) or {}
+    return templates.TemplateResponse("content_page.html", {
+        "request": request,
+        "page_title": "Публичная оферта",
+        "page_html": ss.get("offer_html") or legal.default_offer_html(ss),
+    })
+
+
 @router.get("/category/{slug}", response_class=HTMLResponse)
 async def category_page(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     categories = await _get_categories(db)

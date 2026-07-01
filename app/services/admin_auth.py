@@ -64,8 +64,10 @@ def secret_matches(value: str) -> bool:
 # ─── Сидинг учёток из .env ────────────────────────────────────────────────────
 
 async def _seed_user(db: AsyncSession, username: str, password: str, role: str) -> None:
-    """Создаёт/обновляет учётку с заданной ролью (пароль перезаписывается)."""
-    if not password:
+    """Создаёт/обновляет учётку с заданной ролью (пароль перезаписывается).
+    Плейсхолдер CHANGE_ME из шаблона .env игнорируется — учётка не создаётся."""
+    if not password or password.strip().upper() == "CHANGE_ME":
+        logger.warning("[admin] пароль для '%s' не задан (или CHANGE_ME) — учётка пропущена", username)
         return
     existing = (
         await db.execute(select(AdminUser).where(AdminUser.username == username))

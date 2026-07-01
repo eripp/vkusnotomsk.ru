@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
+from app.config import settings
 from app.database import get_db
 from app.models import OtpCode, OtpChannel, User
 from app.services.jwt import create_access_token, decode_access_token
@@ -242,7 +243,7 @@ async def verify_otp(payload: VerifyOtpIn, request: Request, response: Response,
         httponly=True,
         max_age=JWT_TTL_DAYS * 86400,
         samesite="lax",
-        secure=False,   # True на проде с HTTPS
+        secure=settings.COOKIE_SECURE,   # dev=false (HTTP), prod=true (HTTPS)
     )
 
     return {

@@ -159,7 +159,7 @@ async def admin_login_submit(
         httponly=True,
         max_age=admin_auth.ADMIN_SESSION_DAYS * 86400,
         samesite="lax",
-        secure=False,   # True на проде с HTTPS
+        secure=settings.COOKIE_SECURE,   # dev=false (HTTP), prod=true (HTTPS)
     )
     return resp
 

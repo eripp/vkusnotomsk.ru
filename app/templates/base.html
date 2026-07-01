@@ -108,8 +108,8 @@
       <a href="/" class="footer-link">Меню</a>
       <a href="/delivery" class="footer-link">Условия доставки</a>
       <a href="#" class="footer-link">Акции</a>
-      <a href="#" class="footer-link">Публичная оферта</a>
-      <a href="#" class="footer-link">Политика конфиденциальности</a>
+      <a href="/offer" class="footer-link">Публичная оферта</a>
+      <a href="/privacy" class="footer-link">Политика конфиденциальности</a>
       <a href="/contacts" class="footer-link">Контакты</a>
     </div>
 
@@ -160,8 +160,8 @@
   <nav class="nav-section">
     <a href="/" class="nav-link nav-link-plain">Меню</a>
     <a href="/delivery" class="nav-link nav-link-plain">Условия доставки</a>
-    <a href="#" class="nav-link nav-link-plain">Публичная оферта</a>
-    <a href="#" class="nav-link nav-link-plain">Акции</a>
+    <a href="/offer" class="nav-link nav-link-plain">Публичная оферта</a>
+    <a href="/privacy" class="nav-link nav-link-plain">Политика конфиденциальности</a>
     <a href="/contacts" class="nav-link nav-link-plain">Контакты</a>
   </nav>
 
@@ -462,5 +462,32 @@ ym({{ _mid }}, "init", {
 {% if request.state.site_settings.get('body_scripts') %}
 {{ request.state.site_settings['body_scripts'] | safe }}
 {% endif %}
+
+<!-- ═══ Cookie-баннер (уведомительное согласие) ═══════════════════════════ -->
+<div class="cookie-banner" id="cookie-banner" hidden>
+  <div class="cookie-text">
+    Мы используем cookie и системы аналитики для работы сайта и улучшения сервиса.
+    Оставаясь на сайте, вы соглашаетесь с
+    <a href="/privacy" target="_blank">Политикой конфиденциальности</a> и обработкой
+    персональных данных.
+  </div>
+  <button class="cookie-accept" onclick="cookieConsent.accept()">Принять</button>
+</div>
+<script>
+  const cookieConsent = {
+    _key: 'vkusno_cookie_consent',
+    init() {
+      try { if (localStorage.getItem(this._key)) return; } catch { return; }
+      const b = document.getElementById('cookie-banner');
+      if (b) b.hidden = false;
+    },
+    accept() {
+      try { localStorage.setItem(this._key, new Date().toISOString()); } catch {}
+      const b = document.getElementById('cookie-banner');
+      if (b) b.hidden = true;
+    },
+  };
+  cookieConsent.init();
+</script>
 </body>
 </html>

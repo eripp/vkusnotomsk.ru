@@ -11,6 +11,13 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# URL берём из окружения (DATABASE_URL) — приоритет над хардкодом в alembic.ini.
+# Так миграции работают и в dev, и в prod (у них разные пароли/БД).
+import os
+_db_url = os.environ.get("DATABASE_URL")
+if _db_url:
+    config.set_main_option("sqlalchemy.url", _db_url)
+
 # Import all models so Alembic sees them
 from app.database import Base
 import app.models  # noqa: F401

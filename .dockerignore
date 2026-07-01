@@ -1,0 +1,19 @@
+# Не тащим в build-контекст: секреты, certbot (root-файлы), медиа, БД-тома, VCS
+.env
+.env.*
+certbot/
+media/
+media-prod/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+dist/
+DEPLOY.md
+CHANGELOG.md
+push.sh

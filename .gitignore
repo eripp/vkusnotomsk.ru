@@ -1,8 +1,11 @@
 .env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 *.pyo
 media/
+media-prod/
 *.egg-info/
 dist/
 .pytest_cache/

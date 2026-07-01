@@ -1,0 +1,70 @@
+# Прод-стек. Запускать ОТДЕЛЬНЫМ проектом, чтобы не конфликтовать с dev (:8000):
+#   docker compose -p vkusno_prod --env-file .env.prod -f docker-compose.prod.yml up -d
+#
+# Отличия от dev: своя БД (том pgdata_prod), своя папка media (./media-prod),
+# web без --reload и без bind-mount кода, порт 8000 наружу НЕ пробрасывается,
+# nginx на :80/:443 с SSL. Секреты — в .env.prod (НЕ в git).
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vkusno}
+      POSTGRES_USER: ${POSTGRES_USER:-vkusno}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD обязателен в .env.prod}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vkusno} -d ${POSTGRES_DB:-vkusno}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env.prod
+    volumes:
+      - ./media-prod:/app/media
+    # порт наружу НЕ пробрасываем — доступ только через nginx
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: python -m app.worker
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env.prod
+    volumes:
+      - ./media-prod:/app/media
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - web
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./media-prod:/app/media:ro
+      - ./app/static:/app/static:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done"
+    restart: unless-stopped
+
+volumes:
+  pgdata_prod:

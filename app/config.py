@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     SMTP_PASS: str = ""
     SITE_URL: str = "http://localhost"
     OPERATOR_TG_CHAT_ID: str = ""
+    # secure-флаг для cookies: false для dev (HTTP :8000), true для prod (HTTPS)
+    COOKIE_SECURE: bool = False
     # Админка: секретный префикс для входа + первичные логин/пароль (засеваются в БД)
     ADMIN_URL_SECRET: str = ""
     ADMIN_USERNAME: str = "admin"
