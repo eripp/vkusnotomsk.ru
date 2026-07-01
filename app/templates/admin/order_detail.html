@@ -4,6 +4,7 @@
 {% set active = 'orders' %}
 
 {% block topbar_actions %}
+<a href="/admin/orders/{{ order.id }}/print" target="_blank" class="btn btn-secondary btn-sm">🖨 Печать</a>
 <a href="/admin/orders" class="btn btn-secondary btn-sm">← Список</a>
 {% endblock %}
 

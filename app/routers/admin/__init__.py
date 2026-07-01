@@ -260,6 +260,22 @@ async def admin_order_detail(request: Request, order_id: int, db: AsyncSession =
     })
 
 
+@router.get("/orders/{order_id}/print", response_class=HTMLResponse)
+async def admin_order_print(request: Request, order_id: int, db: AsyncSession = Depends(get_db)):
+    """Лист заказа для печати (сборка + доставка): чистая страница, авто-печать."""
+    order = (await db.execute(select(Order).where(Order.id == order_id))).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404)
+    items = (await db.execute(select(OrderItem).where(OrderItem.order_id == order_id))).scalars().all()
+    user = None
+    if order.user_id:
+        user = (await db.execute(select(User).where(User.id == order.user_id))).scalar_one_or_none()
+    goods_total = sum(i.line_total for i in items)
+    return _tmpl("admin/order_print.html", request, {
+        "order": order, "items": items, "user": user, "goods_total": goods_total,
+    })
+
+
 @router.post("/orders/{order_id}/status")
 async def admin_order_set_status(
     order_id: int,

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Заказ #{{ order.id }} — лист</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0 }
+    body { font-family: system-ui, Arial, sans-serif; color: #000; font-size: 14px;
+           line-height: 1.4; padding: 16px 20px; max-width: 800px; margin: 0 auto }
+    h1 { font-size: 22px; margin-bottom: 2px }
+    .sub { color: #444; font-size: 13px; margin-bottom: 14px }
+    .row { display: flex; gap: 24px; margin-bottom: 14px; flex-wrap: wrap }
+    .box { flex: 1; min-width: 240px; border: 1px solid #000; border-radius: 6px; padding: 10px 12px }
+    .box h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #555;
+              margin-bottom: 6px; border-bottom: 1px solid #ccc; padding-bottom: 4px }
+    .kv { margin: 3px 0 }
+    .kv b { display: inline-block; min-width: 90px; color: #444; font-weight: 600 }
+    .big { font-size: 16px; font-weight: 700 }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 }
+    th, td { border: 1px solid #000; padding: 7px 8px; text-align: left }
+    th { background: #eee; font-size: 12px; text-transform: uppercase }
+    td.num, th.num { text-align: right; white-space: nowrap }
+    td.qty, th.qty { text-align: center; width: 70px; font-weight: 700 }
+    tfoot td { font-weight: 700 }
+    .sums { margin-top: 8px; margin-left: auto; width: 300px }
+    .sums .kv { display: flex; justify-content: space-between; padding: 2px 0 }
+    .sums .total { font-size: 17px; font-weight: 800; border-top: 2px solid #000; margin-top: 4px; padding-top: 6px }
+    .pay-note { margin-top: 10px; padding: 8px 10px; border: 2px solid #000; border-radius: 6px; font-size: 15px }
+    .toolbar { margin-bottom: 16px }
+    .toolbar button { font-size: 14px; padding: 8px 18px; cursor: pointer; margin-right: 8px }
+    @media print { .toolbar { display: none } body { padding: 0 } }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="window.print()">🖨 Печать</button>
+    <button onclick="window.close()">Закрыть</button>
+  </div>
+
+  <h1>Заказ #{{ order.id }}</h1>
+  <div class="sub">Создан: {{ order.created_at.strftime('%d.%m.%Y %H:%M') }} · Статус: {{ STATUS_LABELS.get(order.status.value, order.status.value) }}</div>
+
+  <div class="row">
+    <div class="box">
+      <h2>Доставка</h2>
+      <div class="kv big">{{ order.delivery_date.strftime('%d.%m.%Y') }}, {{ order.slot_start.strftime('%H:%M') }}–{{ order.slot_end.strftime('%H:%M') }}</div>
+      <div class="kv"><b>Адрес:</b> {{ order.address }}</div>
+      <div class="kv"><b>Телефон:</b> {{ order.phone }}</div>
+      {% if user and user.name %}<div class="kv"><b>Клиент:</b> {{ user.name }}</div>{% endif %}
+    </div>
+    <div class="box">
+      <h2>Оплата</h2>
+      <div class="kv big">{{ PAY_METHOD.get(order.payment_method.value, order.payment_method.value) }}</div>
+      <div class="kv"><b>Статус:</b> {{ PAY_STATUS.get(order.payment_status.value, order.payment_status.value) }}</div>
+      {% if order.payment_method.value == 'cash' and order.cash_change_from %}
+      <div class="kv"><b>Сдача с:</b> {{ order.cash_change_from }} ₽</div>
+      {% endif %}
+      <div class="kv big" style="margin-top:6px">К оплате: {{ order.total_amount }} ₽</div>
+    </div>
+  </div>
+
+  <h2 style="font-size:13px;text-transform:uppercase;color:#555;margin-bottom:4px">Состав заказа (сборка)</h2>
+  <table>
+    <thead>
+      <tr><th style="width:36px">✓</th><th>Позиция</th><th class="qty">Кол-во</th><th class="num">Цена</th><th class="num">Сумма</th></tr>
+    </thead>
+    <tbody>
+      {% for i in items %}
+      <tr>
+        <td></td>
+        <td>{{ i.product_name }}</td>
+        <td class="qty">{{ i.quantity }}</td>
+        <td class="num">{{ i.product_price }} ₽</td>
+        <td class="num">{{ i.line_total }} ₽</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="sums">
+    <div class="kv"><span>Товары</span><span>{{ goods_total }} ₽</span></div>
+    <div class="kv"><span>Доставка</span><span>{{ order.delivery_price if order.delivery_price else 'бесплатно' }}{% if order.delivery_price %} ₽{% endif %}</span></div>
+    {% if order.discount_amount %}<div class="kv"><span>Скидка</span><span>−{{ order.discount_amount }} ₽</span></div>{% endif %}
+    {% if order.cashback_spent %}<div class="kv"><span>Списано кешбэка</span><span>−{{ order.cashback_spent }} ₽</span></div>{% endif %}
+    <div class="kv total"><span>Итого</span><span>{{ order.total_amount }} ₽</span></div>
+  </div>
+
+  {% if order.payment_method.value == 'cash' %}
+  <div class="pay-note">
+    💵 Наличные — принять {{ order.total_amount }} ₽{% if order.cash_change_from %}, приготовить сдачу с {{ order.cash_change_from }} ₽ (сдача {{ order.cash_change_from - order.total_amount }} ₽){% endif %}
+  </div>
+  {% elif order.payment_method.value == 'terminal' %}
+  <div class="pay-note">💳 Оплата картой курьеру — взять терминал</div>
+  {% endif %}
+
+  <script>
+    // авто-открытие диалога печати
+    window.addEventListener('load', () => setTimeout(() => window.print(), 300));
+  </script>
+</body>
+</html>
