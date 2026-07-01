@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 # ─── Гард доступа ─────────────────────────────────────────────────────────────
 # Любой /admin/* без валидной сессии → 404 (админка полностью скрыта от чужих).
 async def require_admin(
+    request: Request,
     vkusno_admin: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> AdminUser:
@@ -45,9 +46,17 @@ async def require_admin(
             await db.execute(select(AdminUser).where(AdminUser.id == admin_id))
         ).scalar_one_or_none()
         if admin and admin.is_active:
+            request.state.admin = admin   # доступно в _tmpl (роль для меню)
             return admin
     # маскируемся под обычный 404 — никаких признаков существования админки
     raise HTTPException(status_code=404, detail="Not Found")
+
+
+async def require_role_admin(admin: AdminUser = Depends(require_admin)) -> AdminUser:
+    """Разделы только для роли admin (API-ключи). Оператору — 404 (раздел скрыт)."""
+    if admin.role != "admin":
+        raise HTTPException(status_code=404, detail="Not Found")
+    return admin
 
 
 # Основной роутер админки — закрыт гардом целиком.
@@ -99,7 +108,9 @@ def _r(path: str) -> RedirectResponse:
 
 
 def _tmpl(name: str, request: Request, ctx: dict):
-    return templates.TemplateResponse(name, {"request": request, **_CTX, **ctx})
+    admin = getattr(request.state, "admin", None)
+    role = admin.role if admin else None
+    return templates.TemplateResponse(name, {"request": request, "role": role, **_CTX, **ctx})
 
 
 # ─── Вход / выход (без гарда) ─────────────────────────────────────────────────
@@ -1150,6 +1161,48 @@ async def admin_settings_save(request: Request, db: AsyncSession = Depends(get_d
     await db.commit()
     invalidate_settings_cache()
     return _r("/admin/settings?msg=Настройки+сохранены")
+
+
+async def _save_settings_form(request: Request, db: AsyncSession) -> None:
+    """Общий сейв формы настроек в SiteSetting (чекбоксы → '0' если не отмечены)."""
+    from app.services.settings import invalidate_settings_cache
+    form = await request.form()
+    form_data = dict(form)
+    for key in _CHECKBOX_KEYS:
+        if key not in form_data:
+            form_data[key] = "0"
+    existing = {s.key: s for s in (await db.execute(select(SiteSetting))).scalars().all()}
+    for key, value in form_data.items():
+        if key in existing:
+            existing[key].value = str(value)
+        else:
+            db.add(SiteSetting(key=key, value=str(value)))
+    await db.commit()
+    invalidate_settings_cache()
+
+
+@router.get("/api-settings", response_class=HTMLResponse)
+async def admin_api_settings(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    _: AdminUser = Depends(require_role_admin),   # только admin, оператору → 404
+):
+    settings_rows = (await db.execute(select(SiteSetting).order_by(SiteSetting.key))).scalars().all()
+    return _tmpl("admin/api_settings.html", request, {
+        "active": "api-settings",
+        "settings_map": {s.key: s.value for s in settings_rows},
+        "msg": request.query_params.get("msg"),
+    })
+
+
+@router.post("/api-settings")
+async def admin_api_settings_save(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    _: AdminUser = Depends(require_role_admin),
+):
+    await _save_settings_form(request, db)
+    return _r("/admin/api-settings?msg=Ключи+сохранены")
 
 
 # ─── Stories ──────────────────────────────────────────────────────────────────

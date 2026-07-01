@@ -1,0 +1,142 @@
+{% extends "admin/base.html" %}
+{% block title %}Ключи API{% endblock %}
+{% block page_title %}Ключи API{% endblock %}
+{% set active = 'api-settings' %}
+
+{% macro val(key, default='') %}{{ settings_map.get(key, default) }}{% endmacro %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" type="submit" form="api-settings-form">💾 Сохранить</button>
+{% endblock %}
+
+{% block content %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+
+<p style="color:#888;font-size:13px;margin-bottom:12px">
+  Секретные ключи интеграций. Раздел доступен только администратору.
+</p>
+
+<form method="post" action="/admin/api-settings" id="api-settings-form">
+
+  <!-- ЮKassa -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">ЮKassa — приём онлайн-оплаты</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>shopId <span style="color:#aaa;font-weight:400">— yookassa_shop_id (идентификатор магазина)</span></label>
+        <input name="yookassa_shop_id" value="{{ val('yookassa_shop_id') }}" placeholder="123456" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>Секретный ключ <span style="color:#aaa;font-weight:400">— yookassa_secret (live_… или test_…)</span></label>
+        <input name="yookassa_secret" value="{{ val('yookassa_secret') }}" placeholder="live_…" autocomplete="off" style="font-family:monospace">
+      </div>
+      <p class="adm-hint" style="color:#888;font-size:12px;margin:4px 0 0">
+        URL для уведомлений (webhook) в личном кабинете ЮKassa:
+        <code>{{ val('site_url') or 'https://ваш-домен' }}/api/payment/callback</code>.
+        Пустые поля — берётся значение из .env.
+      </p>
+    </div>
+  </div>
+
+  <!-- i-dgtl -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">i-dgtl — подтверждение входа</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Ключ <span style="color:#aaa;font-weight:400">— idgtl_api_key (Authorization: Basic, из ЛК direct.i-dgtl.ru)</span></label>
+        <input name="idgtl_api_key" value="{{ val('idgtl_api_key') }}" placeholder="ключ модуля верификации" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>gatewayId <span style="color:#aaa;font-weight:400">— idgtl_gateway_id (ID модуля подтверждения)</span></label>
+        <input name="idgtl_gateway_id" value="{{ val('idgtl_gateway_id') }}" placeholder="напр. jRUOLE" autocomplete="off" style="font-family:monospace">
+      </div>
+    </div>
+  </div>
+
+  <!-- Яндекс SmartCaptcha -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Яндекс SmartCaptcha — защита входа от ботов</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Клиентский ключ <span style="color:#aaa;font-weight:400">— smartcaptcha_sitekey (для виджета на странице)</span></label>
+        <input name="smartcaptcha_sitekey" value="{{ val('smartcaptcha_sitekey') }}" placeholder="ysc1_…" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>Серверный ключ <span style="color:#aaa;font-weight:400">— smartcaptcha_secret (для проверки токена)</span></label>
+        <input name="smartcaptcha_secret" value="{{ val('smartcaptcha_secret') }}" placeholder="ysc2_…" autocomplete="off" style="font-family:monospace">
+      </div>
+      <p class="adm-hint" style="color:#888;font-size:12px;margin:4px 0 0">
+        Капча проверяется перед отправкой кода. Оба поля пустые — капча отключена.
+        Получить ключи: Yandex Cloud → SmartCaptcha.
+      </p>
+    </div>
+  </div>
+
+  <!-- Plusofon -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Plusofon — отправка кода по SMS (основной)</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>Client <span style="color:#aaa;font-weight:400">— plusofon_client_id (id клиента из кабинета)</span></label>
+        <input name="plusofon_client_id" value="{{ val('plusofon_client_id') }}" placeholder="10553" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>Токен <span style="color:#aaa;font-weight:400">— plusofon_token (Bearer, ключ доступа)</span></label>
+        <input name="plusofon_token" value="{{ val('plusofon_token') }}" placeholder="ключ доступа" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>number_id <span style="color:#aaa;font-weight:400">— plusofon_number_id (id номера-отправителя)</span></label>
+        <input name="plusofon_number_id" value="{{ val('plusofon_number_id') }}" placeholder="напр. 124162" autocomplete="off" style="font-family:monospace">
+      </div>
+      <p class="adm-hint" style="color:#888;font-size:12px;margin:4px 0 0">
+        Канал «SMS» при входе шлёт код через Plusofon. Пустые поля — берётся из .env;
+        если не задано, используется запасной шлюз SMS.RU.
+      </p>
+    </div>
+  </div>
+
+  <!-- SMS.RU -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">SMS.RU — резервная отправка кода (если Plusofon не задан)</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>api_id <span style="color:#aaa;font-weight:400">— smsru_api_id (личный кабинет sms.ru → Настройки → API)</span></label>
+        <input name="smsru_api_id" value="{{ val('smsru_api_id') }}" placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" name="smsru_test" value="1" {% if val('smsru_test') in ('1','true','on','yes') %}checked{% endif %}>
+          Тестовый режим (test=1 — SMS не отправляется и баланс не списывается)
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dadata -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Dadata — адреса и геокодинг</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>API-ключ <span style="color:#aaa;font-weight:400">— dadata_token (подсказки и карта)</span></label>
+        <input name="dadata_token" value="{{ val('dadata_token') }}" placeholder="9222f9ef…" autocomplete="off" style="font-family:monospace">
+      </div>
+      <div class="adm-field">
+        <label>Секретный ключ <span style="color:#aaa;font-weight:400">— dadata_secret (для стандартизации, опционально)</span></label>
+        <input name="dadata_secret" value="{{ val('dadata_secret') }}" placeholder="33b7d2c0…" autocomplete="off" style="font-family:monospace">
+      </div>
+    </div>
+  </div>
+
+  <!-- Яндекс.Карты -->
+  <div class="adm-card" style="margin-bottom:1rem">
+    <div class="adm-card-title">Яндекс.Карты — ключ JS API (страница «Контакты»)</div>
+    <div class="adm-form">
+      <div class="adm-field">
+        <label>API-ключ <span style="color:#aaa;font-weight:400">— yandex_maps_key</span></label>
+        <input name="yandex_maps_key" value="{{ val('yandex_maps_key') }}" placeholder="xxxxxxxx-xxxx-xxxx-..." autocomplete="off" style="font-family:monospace">
+      </div>
+    </div>
+  </div>
+
+</form>
+{% endblock %}

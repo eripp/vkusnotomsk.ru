@@ -134,6 +134,9 @@
     <a href="/admin/zones" {% if active == 'zones' %}class="active"{% endif %}>🗺 Зоны доставки</a>
     <a href="/admin/schedule" {% if active == 'schedule' %}class="active"{% endif %}>🕐 Расписание</a>
     <a href="/admin/settings" {% if active == 'settings' %}class="active"{% endif %}>⚙️ Настройки</a>
+    {% if role == 'admin' %}
+    <a href="/admin/api-settings" {% if active == 'api-settings' %}class="active"{% endif %}>🔑 Ключи API</a>
+    {% endif %}
     <a href="/admin/audit" {% if active == 'audit' %}class="active"{% endif %}>🛡 Аудит</a>
   </nav>
   <div class="adm-sidebar-footer">

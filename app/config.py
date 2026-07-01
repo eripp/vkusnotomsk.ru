@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     ADMIN_URL_SECRET: str = ""
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = ""
+    OPERATOR_USERNAME: str = "operator"
+    OPERATOR_PASSWORD: str = ""
 
 
 settings = Settings()

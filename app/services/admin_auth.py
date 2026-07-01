@@ -61,23 +61,30 @@ def secret_matches(value: str) -> bool:
     return secrets.compare_digest(value, settings.ADMIN_URL_SECRET)
 
 
-# ─── Сидинг администратора из .env ────────────────────────────────────────────
+# ─── Сидинг учёток из .env ────────────────────────────────────────────────────
 
-async def seed_admin(db: AsyncSession) -> None:
-    """Создаёт/обновляет AdminUser из ADMIN_USERNAME/ADMIN_PASSWORD при старте.
-    Без ADMIN_PASSWORD ничего не делает (вход будет невозможен — это безопасно)."""
-    if not settings.ADMIN_PASSWORD:
-        logger.warning("[admin] ADMIN_PASSWORD не задан — вход в админку отключён")
+async def _seed_user(db: AsyncSession, username: str, password: str, role: str) -> None:
+    """Создаёт/обновляет учётку с заданной ролью (пароль перезаписывается)."""
+    if not password:
         return
-    username = settings.ADMIN_USERNAME or "admin"
     existing = (
         await db.execute(select(AdminUser).where(AdminUser.username == username))
     ).scalar_one_or_none()
-    new_hash = hash_password(settings.ADMIN_PASSWORD)
+    new_hash = hash_password(password)
     if existing:
         existing.password_hash = new_hash
+        existing.role = role
         existing.is_active = True
     else:
-        db.add(AdminUser(username=username, password_hash=new_hash, is_active=True))
+        db.add(AdminUser(username=username, password_hash=new_hash, role=role, is_active=True))
+    logger.info("[admin] учётка '%s' (%s) готова", username, role)
+
+
+async def seed_admin(db: AsyncSession) -> None:
+    """Засевает admin и operator из .env при старте. Без пароля учётка не создаётся
+    (вход невозможен — это безопасно)."""
+    if not settings.ADMIN_PASSWORD:
+        logger.warning("[admin] ADMIN_PASSWORD не задан — вход администратора отключён")
+    await _seed_user(db, settings.ADMIN_USERNAME or "admin", settings.ADMIN_PASSWORD, "admin")
+    await _seed_user(db, settings.OPERATOR_USERNAME or "operator", settings.OPERATOR_PASSWORD, "operator")
     await db.commit()
-    logger.info("[admin] учётка '%s' готова", username)

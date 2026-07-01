@@ -421,5 +421,7 @@ class AdminUser(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(100), unique=True)
     password_hash: Mapped[str] = mapped_column(String(200))
+    # роль: "admin" — полный доступ; "operator" — всё, кроме API-ключей
+    role: Mapped[str] = mapped_column(String(20), default="admin", server_default="admin")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
