@@ -2,6 +2,7 @@
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -131,9 +132,13 @@ async def notify_order_new(db: AsyncSession, order: Order) -> None:
         text = _order_sms_text(order, items, "Ваш заказ принят!")
         await _notify_user(user, ns, order, items, "Ваш заказ принят", text)
 
-    # Оператору
+    # Оператору — Telegram + email
     op_text = _operator_order_text(order, items)
-    await _notify_operator(op_text)
+    await _notify_operator(
+        op_text,
+        email_subject=f"Новый заказ #{order.id} — {order.total_amount} ₽",
+        email_html=_operator_order_email_html(order, items),
+    )
 
 
 async def notify_order_status(db: AsyncSession, order: Order) -> None:
@@ -190,8 +195,14 @@ async def send_email(to: str, subject: str, html: str) -> None:
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"]    = f"Вкусно Томск <{settings.SMTP_USER}>"
+        # mail.ru отвергает From с display-name ("550 invalid headers") —
+        # используем чистый адрес отправителя.
+        msg["From"]    = settings.SMTP_USER
         msg["To"]      = to
+        # Date и Message-ID обязательны — mail.ru отвергает письма без них.
+        # Домен Message-ID берём из адреса отправителя.
+        msg["Date"]       = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain=settings.SMTP_USER.split("@")[-1] if "@" in settings.SMTP_USER else None)
         msg.attach(MIMEText(html, "html", "utf-8"))
 
         # Яндекс 465 → SSL; другие порты — STARTTLS
@@ -302,14 +313,31 @@ async def send_telegram(chat_id: int, text: str) -> None:
 
 # ─── Оператор ─────────────────────────────────────────────────────────────────
 
-async def _notify_operator(text: str) -> None:
-    """Уведомление оператору: TG (из переменной OPERATOR_TG_CHAT_ID)."""
+async def _notify_operator(text: str, email_subject: str | None = None, email_html: str | None = None) -> None:
+    """Уведомление оператору: Telegram (OPERATOR_TG_CHAT_ID) + email (operator_email).
+    email отправляется, если переданы subject/html и задан адрес."""
     from app.config import settings
+
+    # Telegram
     chat_id = getattr(settings, "OPERATOR_TG_CHAT_ID", None)
-    if not chat_id:
+    if chat_id:
+        await send_telegram(int(chat_id), text)
+    else:
         logger.info("[OP] нет OPERATOR_TG_CHAT_ID: %s", text[:80])
-        return
-    await send_telegram(int(chat_id), text)
+
+    # Email — адрес из настроек админки (приоритет), иначе из .env
+    if email_subject and email_html:
+        op_email = settings.OPERATOR_EMAIL
+        try:
+            from app.services.settings import get_site_settings
+            from app.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                cfg = await get_site_settings(db)
+            op_email = (cfg.get("operator_email") or "").strip() or op_email
+        except Exception as exc:
+            logger.warning("[OP] не удалось прочитать operator_email: %s", exc)
+        if op_email:
+            await send_email(op_email, email_subject, email_html)
 
 
 # ─── Вспомогательные ──────────────────────────────────────────────────────────
@@ -390,6 +418,41 @@ def _operator_order_text(order: Order, items: list[OrderItem]) -> str:
     if order.cashback_spent:
         lines.append(f"Бонусы: −{order.cashback_spent} ₽")
     return "\n".join(lines)
+
+
+def _operator_order_email_html(order: Order, items: list[OrderItem]) -> str:
+    """Письмо оператору о новом заказе: контакты, доставка, состав, оплата."""
+    rows = "".join(
+        f"<tr><td style='padding:4px 8px'>{it.product_name}</td>"
+        f"<td style='padding:4px 8px;text-align:center'>{it.quantity}</td>"
+        f"<td style='padding:4px 8px;text-align:right'>{it.line_total} ₽</td></tr>"
+        for it in items
+    )
+    pay = _PAYMENT_LABELS.get(order.payment_method.value, order.payment_method.value)
+    change = f"<p>Сдача с: <strong>{order.cash_change_from} ₽</strong></p>" if (
+        order.payment_method.value == "cash" and order.cash_change_from) else ""
+    return f"""<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>Новый заказ #{order.id}</title></head>
+<body style="font-family:sans-serif;color:#222;max-width:560px;margin:0 auto;padding:20px">
+  <h2 style="color:#ff6b2c">Новый заказ #{order.id}</h2>
+  <p><strong>Телефон:</strong> {order.phone}</p>
+  <p><strong>Адрес:</strong> {order.address}</p>
+  <p><strong>Доставка:</strong> {order.delivery_date} {order.slot_start}–{order.slot_end}</p>
+  <p><strong>Оплата:</strong> {pay}</p>
+  {change}
+  <table width="100%" cellspacing="0" style="border-collapse:collapse;margin:16px 0">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:6px 8px;text-align:left">Товар</th>
+      <th style="padding:6px 8px">Кол-во</th>
+      <th style="padding:6px 8px;text-align:right">Сумма</th>
+    </tr></thead>
+    <tbody>{rows}</tbody>
+    <tfoot><tr style="font-weight:bold">
+      <td colspan="2" style="padding:6px 8px;border-top:1px solid #ddd">Итого</td>
+      <td style="padding:6px 8px;text-align:right;border-top:1px solid #ddd">{order.total_amount} ₽</td>
+    </tr></tfoot>
+  </table>
+</body></html>"""
 
 
 def _order_email_html(order: Order, items: list[OrderItem], title: str) -> str:

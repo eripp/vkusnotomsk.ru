@@ -69,9 +69,13 @@
           <input name="contact_phone" value="{{ val('contact_phone') }}" placeholder="+7 (3822) 713-100">
         </div>
         <div class="adm-field">
-          <label>Email <span style="color:#aaa;font-weight:400">— contact_email</span></label>
+          <label>Email <span style="color:#aaa;font-weight:400">— contact_email (публичный, на сайте)</span></label>
           <input name="contact_email" value="{{ val('contact_email') }}" placeholder="mail@vkusnotomsk.ru">
         </div>
+      </div>
+      <div class="adm-field">
+        <label>Email для уведомлений о заказах <span style="color:#aaa;font-weight:400">— operator_email (новые заказы; пусто — из .env)</span></label>
+        <input name="operator_email" value="{{ val('operator_email') }}" placeholder="mail@vkusnotomsk.ru">
       </div>
       <div class="adm-field-row">
         <div class="adm-field">

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     SMTP_PASS: str = ""
     SITE_URL: str = "http://localhost"
     OPERATOR_TG_CHAT_ID: str = ""
+    OPERATOR_EMAIL: str = "mail@vkusnotomsk.ru"   # email для уведомлений о заказах
     # secure-флаг для cookies: false для dev (HTTP :8000), true для prod (HTTPS)
     COOKIE_SECURE: bool = False
     # Админка: секретный префикс для входа + первичные логин/пароль (засеваются в БД)

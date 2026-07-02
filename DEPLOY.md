@@ -58,6 +58,10 @@ docker compose -p vkusno_prod --env-file .env.prod -f docker-compose.prod.yml up
 docker compose -p vkusno_prod --env-file .env.prod -f docker-compose.prod.yml exec web alembic upgrade head
 ```
 
+> nginx перезагружать НЕ нужно: upstream `web` резолвится динамически (resolver
+> 127.0.0.11 + переменная в proxy_pass), поэтому смена IP контейнера при пересборке
+> больше не вызывает 502.
+
 ## Полезное
 
 ```bash
