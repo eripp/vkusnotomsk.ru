@@ -47,6 +47,7 @@
       <div class="kv"><b>Адрес:</b> {{ order.address }}</div>
       <div class="kv"><b>Телефон:</b> {{ order.phone }}</div>
       {% if user and user.name %}<div class="kv"><b>Клиент:</b> {{ user.name }}</div>{% endif %}
+      <div class="kv"><b>Приборы:</b> {{ order.persons_count }}</div>
     </div>
     <div class="box">
       <h2>Оплата</h2>

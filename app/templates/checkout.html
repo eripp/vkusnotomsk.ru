@@ -103,6 +103,10 @@
           </div>
         </div>
         <div id="schedule-error" class="co-error" style="display:none">На выбранную дату доставка недоступна</div>
+        <div class="co-field" style="margin-top:8px">
+          <label for="f-persons">Количество приборов</label>
+          <input id="f-persons" type="number" min="0" max="100" step="1" value="0">
+        </div>
       </div>
 
       <div class="co-section">
@@ -581,6 +585,7 @@ const checkout = {
       cash_change_from: this._getPayment() === 'cash'
         ? (parseInt(document.getElementById('f-change')?.value) || null)
         : null,
+      persons_count:   parseInt(document.getElementById('f-persons')?.value) || 0,
       comment:         document.getElementById('f-comment')?.value.trim() || '',
       promocode:       this._promoCode || null,
       cashback_spend:  this._cashbackSpend || 0,

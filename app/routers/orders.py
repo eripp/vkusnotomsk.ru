@@ -54,6 +54,7 @@ class CreateOrderIn(BaseModel):
     schedule_entry_id: Optional[int] = None
     payment_method: str = "online"
     cash_change_from: Optional[int] = None
+    persons_count: int = 0
     comment: str = ""
     promocode: Optional[str] = None
     cashback_spend: int = 0
@@ -79,6 +80,7 @@ async def _materialize_order(db: AsyncSession, data: dict, paid: bool) -> Order:
         schedule_entry_id=data.get("schedule_entry_id"),
         payment_method=PaymentMethod(data["payment_method"]),
         cash_change_from=data.get("cash_change_from"),
+        persons_count=data.get("persons_count", 0),
         status=OrderStatus.new,
         payment_status=PaymentStatus.paid if paid else PaymentStatus.pending,
         promocode_id=data.get("promocode_id"),
@@ -314,6 +316,7 @@ async def create_order(
         "schedule_entry_id": payload.schedule_entry_id,
         "payment_method": payment_method.value,
         "cash_change_from": payload.cash_change_from,
+        "persons_count": max(0, min(100, payload.persons_count or 0)),   # приборы, 0..100
         "promocode_id": promo_obj.id if promo_obj else None,
         "discount_amount": discount_amount,
         "cashback_spend": cashback_spend,

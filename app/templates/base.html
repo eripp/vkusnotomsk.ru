@@ -453,7 +453,7 @@ ym({{ _mid }}, "init", {
   trackLinks: true,
   accurateTrackBounce: true,
   webvisor: {{ 'true' if request.state.site_settings.get('metrika_webvisor') == '1' else 'false' }},
-  ecommerce: {{ '"dataLayer"' if request.state.site_settings.get('metrika_ecom') == '1' else 'false' }}
+  ecommerce: {{ ('"dataLayer"' if request.state.site_settings.get('metrika_ecom') == '1' else 'false') | safe }}
 });
 </script>
 <noscript><div><img src="https://mc.yandex.ru/watch/{{ _mid }}" style="position:absolute; left:-9999px;" alt=""></div></noscript>

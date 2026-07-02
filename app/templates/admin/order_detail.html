@@ -4,8 +4,35 @@
 {% set active = 'orders' %}
 
 {% block topbar_actions %}
+<button type="button" class="btn btn-secondary btn-sm" id="copy-json-btn" onclick="copyOrderJson({{ order.id }})">📋 Копировать JSON</button>
 <a href="/admin/orders/{{ order.id }}/print" target="_blank" class="btn btn-secondary btn-sm">🖨 Печать</a>
 <a href="/admin/orders" class="btn btn-secondary btn-sm">← Список</a>
+<script>
+async function copyOrderJson(id) {
+  const btn = document.getElementById('copy-json-btn');
+  const orig = btn.textContent;
+  try {
+    const res = await fetch(`/admin/orders/${id}/json`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const text = JSON.stringify(data, null, 2);
+    // clipboard API работает на HTTPS; fallback через textarea для http
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const el = document.createElement('textarea');
+      el.value = text; el.style.position = 'fixed'; el.style.opacity = '0';
+      document.body.appendChild(el); el.select();
+      document.execCommand('copy'); document.body.removeChild(el);
+    }
+    btn.textContent = '✅ Скопировано';
+  } catch (e) {
+    btn.textContent = '✗ Ошибка';
+    console.error(e);
+  }
+  setTimeout(() => { btn.textContent = orig; }, 2000);
+}
+</script>
 {% endblock %}
 
 {% block content %}
@@ -51,6 +78,8 @@
           ('Адрес', order.address),
           ('Дата доставки', order.delivery_date ~ ' ' ~ order.slot_start.strftime('%H:%M') ~ '–' ~ order.slot_end.strftime('%H:%M')),
           ('Способ оплаты', PAY_METHOD[order.payment_method.value]),
+          ('Сдача с', (order.cash_change_from ~ ' ₽') if order.cash_change_from else '—'),
+          ('Приборы', order.persons_count),
           ('Статус оплаты', order.payment_status.value),
           ('YooKassa ID', order.yookassa_payment_id or '—'),
           ('Промокод', order.promocode_id or '—'),

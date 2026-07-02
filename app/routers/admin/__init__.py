@@ -9,7 +9,7 @@ from typing import Optional
 from PIL import Image as PILImage
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import func, select, update, or_, desc
@@ -274,6 +274,78 @@ async def admin_order_print(request: Request, order_id: int, db: AsyncSession = 
     return _tmpl("admin/order_print.html", request, {
         "order": order, "items": items, "user": user, "goods_total": goods_total,
     })
+
+
+@router.get("/orders/{order_id}/json")
+async def admin_order_json(order_id: int, db: AsyncSession = Depends(get_db)):
+    """JSON заказа в структуре расширения foodninja_extractor (костыль-совместимость
+    с внешней системой приёма заказов). Все значения — строки, суммы — голые числа."""
+    order = (await db.execute(select(Order).where(Order.id == order_id))).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404)
+    items = (await db.execute(select(OrderItem).where(OrderItem.order_id == order_id))).scalars().all()
+    user = None
+    if order.user_id:
+        user = (await db.execute(select(User).where(User.id == order.user_id))).scalar_one_or_none()
+    promo_code = ""
+    if order.promocode_id:
+        pr = (await db.execute(select(Promocode).where(Promocode.id == order.promocode_id))).scalar_one_or_none()
+        promo_code = pr.code if pr else ""
+
+    goods_total = sum(i.line_total for i in items)
+    # Метод оплаты — в формулировках внешней системы
+    _pay_ext = {"online": "Онлайн", "terminal": "Картой при получении", "cash": "Наличные"}
+    pm = order.payment_method.value
+    # changeFrom — текстом (как во внешней системе)
+    if pm == "cash":
+        change_from = str(order.cash_change_from) if order.cash_change_from else "Не требуется"
+    else:
+        change_from = "Не требуется"
+    ready_by = f"{order.delivery_date.strftime('%d.%m.%Y')} {order.slot_start.strftime('%H:%M')}"
+
+    # Структура info — как в реальном JSON внешней системы. Адрес одной строкой
+    # в street (отдельных полей у нас нет); остальные адресные поля пустые.
+    info = {
+        "orderNumber": str(order.id),
+        "city": "Томск",
+        "orderType": "Доставка",
+        "customerName": (user.name if user and user.name else ""),
+        "phone": order.phone.lstrip("+"),
+        "street": order.address,
+        "house": "",
+        "entrance": "",
+        "fleet": "",
+        "apratment": "",
+        "intercom": "",
+        "paymentMethod": _pay_ext.get(pm, pm),
+        "changeFrom": change_from,
+        "personsCount": str(order.persons_count),
+        "orderDateTime": order.created_at.strftime("%d.%m.%Y %H:%M"),
+        "readyByTime": ready_by,
+        "salesChannel": "Сайт",
+        "orderNotes": "",
+        # доп. поля (сумма/скидка/промокод) — полезны оператору, внешней системе не мешают
+        "orderAmount": str(goods_total),
+        "deliveryCost": str(order.delivery_price),
+        "discount": str(order.discount_amount) if order.discount_amount else "",
+        "promoCode": promo_code,
+        "totalAmount": str(order.total_amount),
+    }
+    data = {
+        "products": [
+            {
+                "name": it.product_name,
+                "price": str(it.product_price),
+                "quantity": str(it.quantity),
+                "total": str(it.line_total),
+            }
+            for it in items
+        ],
+        "history": [],
+        "info": info,
+        "total": str(order.total_amount),
+    }
+    return JSONResponse(data)
 
 
 @router.post("/orders/{order_id}/status")

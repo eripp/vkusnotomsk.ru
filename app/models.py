@@ -247,6 +247,7 @@ class Order(Base):
     )
     payment_method: Mapped[PaymentMethod] = mapped_column(Enum(PaymentMethod))
     cash_change_from: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    persons_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # кол-во приборов
     status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), default=OrderStatus.new)
     payment_status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus), default=PaymentStatus.pending)
     yookassa_payment_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
