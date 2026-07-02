@@ -254,7 +254,12 @@ async def admin_order_detail(request: Request, order_id: int, db: AsyncSession =
     if not order:
         raise HTTPException(status_code=404)
     items = (await db.execute(select(OrderItem).where(OrderItem.order_id == order_id))).scalars().all()
+    # имя старых заказов лежит в user.name (customer_name появился с миграции 0011)
+    order_user = None
+    if order.user_id:
+        order_user = (await db.execute(select(User).where(User.id == order.user_id))).scalar_one_or_none()
     return _tmpl("admin/order_detail.html", request, {
+        "order_user": order_user,
         "active": "orders", "order": order, "items": items,
         "msg": request.query_params.get("msg"),
     })
@@ -309,7 +314,7 @@ async def admin_order_json(order_id: int, db: AsyncSession = Depends(get_db)):
         "orderNumber": str(order.id),
         "city": "Томск",
         "orderType": "Доставка",
-        "customerName": (user.name if user and user.name else ""),
+        "customerName": order.customer_name or (user.name if user and user.name else ""),
         "phone": order.phone.lstrip("+"),
         "street": order.address,
         "house": "",

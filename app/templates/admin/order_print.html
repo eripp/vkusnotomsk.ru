@@ -46,7 +46,8 @@
       <div class="kv big">{{ order.delivery_date.strftime('%d.%m.%Y') }}, {{ order.slot_start.strftime('%H:%M') }}–{{ order.slot_end.strftime('%H:%M') }}</div>
       <div class="kv"><b>Адрес:</b> {{ order.address }}</div>
       <div class="kv"><b>Телефон:</b> {{ order.phone }}</div>
-      {% if user and user.name %}<div class="kv"><b>Клиент:</b> {{ user.name }}</div>{% endif %}
+      {% set cname = order.customer_name or (user.name if user else '') %}
+      {% if cname %}<div class="kv"><b>Клиент:</b> {{ cname }}</div>{% endif %}
       <div class="kv"><b>Приборы:</b> {{ order.persons_count }}</div>
     </div>
     <div class="box">

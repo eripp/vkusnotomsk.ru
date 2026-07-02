@@ -234,6 +234,7 @@ class Order(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    customer_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # имя из формы заказа
     phone: Mapped[str] = mapped_column(String(20))
     address: Mapped[str] = mapped_column(Text)
     address_lat: Mapped[Optional[float]] = mapped_column(Numeric(10, 7), nullable=True)

@@ -69,6 +69,7 @@ async def _materialize_order(db: AsyncSession, data: dict, paid: bool) -> Order:
     Используется и при cash/terminal (сразу), и в webhook после онлайн-оплаты."""
     order = Order(
         user_id=data.get("user_id"),
+        customer_name=data.get("customer_name"),
         phone=data["phone"],
         address=data["address"],
         address_lat=data.get("lat"),
@@ -305,6 +306,7 @@ async def create_order(
     # материализации после оплаты)
     order_data = {
         "user_id": current_user.id if current_user else None,
+        "customer_name": (payload.name or "").strip() or None,
         "phone": payload.phone,
         "address": payload.address,
         "lat": payload.lat,

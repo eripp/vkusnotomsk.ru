@@ -74,6 +74,7 @@ async function copyOrderJson(id) {
       <div class="adm-card-title">Детали</div>
       <table style="width:100%;border-collapse:collapse">
         {% set rows = [
+          ('Имя', order.customer_name or (order_user.name if order_user else None) or '—'),
           ('Телефон', order.phone),
           ('Адрес', order.address),
           ('Дата доставки', order.delivery_date ~ ' ' ~ order.slot_start.strftime('%H:%M') ~ '–' ~ order.slot_end.strftime('%H:%M')),
