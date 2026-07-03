@@ -198,6 +198,19 @@ async def cashback_balance(
 
 # ─── API: создать заказ ───────────────────────────────────────────────────────
 
+def _normalize_order_phone(phone: str) -> str:
+    """Нормализует телефон заказа к +7XXXXXXXXXX. 400, если не 11 цифр
+    (защита от пустого/мусорного значения вроде '+' в обход маски на фронте)."""
+    digits = "".join(c for c in (phone or "") if c.isdigit())
+    if len(digits) == 10:
+        digits = "7" + digits
+    elif len(digits) == 11 and digits.startswith("8"):
+        digits = "7" + digits[1:]
+    if len(digits) != 11 or not digits.startswith("7"):
+        raise HTTPException(status_code=400, detail="Укажите корректный номер телефона")
+    return "+" + digits
+
+
 def _base_url(request: Request) -> str:
     """Базовый URL сайта по входящему запросу (с учётом проксирования за nginx).
     Используется для return_url YooKassa — чтобы вернуть на тот же домен,
@@ -218,6 +231,10 @@ async def create_order(
 ):
     if not payload.items:
         raise HTTPException(status_code=400, detail="Корзина пуста")
+
+    # Телефон обязателен и должен быть валидным (11 цифр). Нормализуем к +7XXXXXXXXXX
+    # и подставляем обратно — иначе в заказ мог попасть мусор вроде "+" (обход маски).
+    payload.phone = _normalize_order_phone(payload.phone)
 
     # если залогинен и имя в профиле пустое — сохраняем введённое в заказе
     if current_user and not (current_user.name or "").strip() and payload.name.strip():

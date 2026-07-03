@@ -510,7 +510,7 @@ const checkout = {
     const errs = [];
     if (!document.getElementById('f-name')?.value.trim())  errs.push('Укажите имя');
     const phone = document.getElementById('f-phone')?.value.trim();
-    if (!phone) errs.push('Укажите телефон');
+    if ((phone || '').replace(/\D/g, '').length < 11) errs.push('Укажите корректный номер телефона');
     if (this.mode === 'delivery') {
       if (!document.getElementById('f-street')?.value.trim()) errs.push('Укажите улицу');
       if (!document.getElementById('f-house')?.value.trim())  errs.push('Укажите дом');
