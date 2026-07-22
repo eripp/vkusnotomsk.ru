@@ -1,5 +1,6 @@
 import logging
-from datetime import date, time
+import random
+from datetime import date, time, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -68,6 +69,7 @@ async def _materialize_order(db: AsyncSession, data: dict, paid: bool) -> Order:
     инкрементит промокод. Если paid=True — статус оплачен + начисление кешбэка.
     Используется и при cash/terminal (сразу), и в webhook после онлайн-оплаты."""
     order = Order(
+        order_number=await _gen_order_number(db),
         user_id=data.get("user_id"),
         customer_name=data.get("customer_name"),
         phone=data["phone"],
@@ -209,6 +211,21 @@ def _normalize_order_phone(phone: str) -> str:
     if len(digits) != 11 or not digits.startswith("7"):
         raise HTTPException(status_code=400, detail="Укажите корректный номер телефона")
     return "+" + digits
+
+
+async def _gen_order_number(db: AsyncSession) -> str:
+    """Публичный номер заказа YYMMDD-XXXX (дата + 4 случайные цифры), уникальный.
+    Несколько попыток на случай коллизии (10000 вариантов в день)."""
+    prefix = datetime.now().strftime("%y%m%d")
+    for _ in range(20):
+        num = f"{prefix}-{random.randint(0, 9999):04d}"
+        exists = (await db.execute(
+            select(Order.id).where(Order.order_number == num)
+        )).scalar_one_or_none()
+        if not exists:
+            return num
+    # крайне маловероятно — фолбэк с большим диапазоном
+    return f"{prefix}-{random.randint(0, 999999):06d}"
 
 
 def _base_url(request: Request) -> str:

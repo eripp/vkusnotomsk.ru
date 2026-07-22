@@ -311,7 +311,7 @@ async def admin_order_json(order_id: int, db: AsyncSession = Depends(get_db)):
     # Структура info — как в реальном JSON внешней системы. Адрес одной строкой
     # в street (отдельных полей у нас нет); остальные адресные поля пустые.
     info = {
-        "orderNumber": str(order.id),
+        "orderNumber": order.order_number or str(order.id),
         "city": "Томск",
         "orderType": "Доставка",
         "customerName": order.customer_name or (user.name if user and user.name else ""),
@@ -376,6 +376,134 @@ async def admin_order_set_status(
     except Exception as exc:
         logger.warning("[notify] %s", exc)
     return _r(f"/admin/orders/{order_id}?msg=Статус+обновлён")
+
+
+# ─── Редактирование состава/оплаты заказа (AJAX) ──────────────────────────────
+
+async def _recalc_order_total(db: AsyncSession, order: Order) -> int:
+    """Пересчитывает total_amount заказа: товары + доставка − скидка − кешбэк.
+    Скидка/кешбэк остаются как есть (не пересчитываются). Возвращает новый итог."""
+    goods = (await db.execute(
+        select(func.coalesce(func.sum(OrderItem.line_total), 0)).where(OrderItem.order_id == order.id)
+    )).scalar() or 0
+    order.total_amount = max(0, goods + order.delivery_price - order.discount_amount - order.cashback_spent)
+    return order.total_amount
+
+
+async def _order_edit_response(db: AsyncSession, order: Order) -> dict:
+    """Свежий состав + суммы заказа для обновления UI после правки."""
+    items = (await db.execute(
+        select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.id)
+    )).scalars().all()
+    goods = sum(i.line_total for i in items)
+    return {
+        "items": [
+            {"id": i.id, "product_name": i.product_name, "product_price": i.product_price,
+             "quantity": i.quantity, "line_total": i.line_total}
+            for i in items
+        ],
+        "goods_total": goods,
+        "delivery_price": order.delivery_price,
+        "discount_amount": order.discount_amount,
+        "cashback_spent": order.cashback_spent,
+        "total_amount": order.total_amount,
+    }
+
+
+async def _get_order_or_404(db: AsyncSession, order_id: int) -> Order:
+    order = (await db.execute(select(Order).where(Order.id == order_id))).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404)
+    return order
+
+
+class ItemQtyIn(BaseModel):
+    quantity: Optional[int] = None   # None — не менять кол-во
+    price: Optional[int] = None      # None — не менять цену
+
+
+@router.post("/orders/{order_id}/items/{item_id}/qty")
+async def admin_order_item_qty(order_id: int, item_id: int, payload: ItemQtyIn,
+                               db: AsyncSession = Depends(get_db)):
+    """Изменить количество и/или цену позиции. quantity<=0 — удалить позицию."""
+    order = await _get_order_or_404(db, order_id)
+    item = (await db.execute(
+        select(OrderItem).where(OrderItem.id == item_id, OrderItem.order_id == order_id)
+    )).scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Позиция не найдена")
+    if payload.quantity is not None and payload.quantity <= 0:
+        await db.delete(item)
+    else:
+        if payload.quantity is not None:
+            item.quantity = payload.quantity
+        if payload.price is not None:
+            item.product_price = max(0, payload.price)
+        item.line_total = item.product_price * item.quantity
+    await _recalc_order_total(db, order)
+    await db.commit()
+    return await _order_edit_response(db, order)
+
+
+class ItemAddIn(BaseModel):
+    product_id: int
+    quantity: int = 1
+
+
+@router.post("/orders/{order_id}/items/add")
+async def admin_order_item_add(order_id: int, payload: ItemAddIn,
+                               db: AsyncSession = Depends(get_db)):
+    """Добавить товар в заказ. Если он уже есть — увеличить количество."""
+    order = await _get_order_or_404(db, order_id)
+    product = (await db.execute(select(Product).where(Product.id == payload.product_id))).scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Товар не найден")
+    qty = max(1, payload.quantity)
+    existing = (await db.execute(
+        select(OrderItem).where(OrderItem.order_id == order_id, OrderItem.product_id == product.id)
+    )).scalar_one_or_none()
+    if existing:
+        existing.quantity += qty
+        existing.line_total = existing.product_price * existing.quantity
+    else:
+        db.add(OrderItem(
+            order_id=order_id, product_id=product.id,
+            product_name=product.name, product_price=product.price,
+            quantity=qty, line_total=product.price * qty,
+        ))
+    await _recalc_order_total(db, order)
+    await db.commit()
+    return await _order_edit_response(db, order)
+
+
+class PaymentIn(BaseModel):
+    payment_method: str
+    cash_change_from: Optional[int] = None
+
+
+@router.post("/orders/{order_id}/payment")
+async def admin_order_payment(order_id: int, payload: PaymentIn,
+                              db: AsyncSession = Depends(get_db)):
+    """Сменить вид оплаты (+ сдача для наличных)."""
+    order = await _get_order_or_404(db, order_id)
+    try:
+        order.payment_method = PaymentMethod(payload.payment_method)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Неверный вид оплаты")
+    order.cash_change_from = payload.cash_change_from if order.payment_method == PaymentMethod.cash else None
+    await db.commit()
+    return {"ok": True, "payment_method": order.payment_method.value,
+            "cash_change_from": order.cash_change_from}
+
+
+@router.get("/products/search")
+async def admin_product_search(q: str = "", db: AsyncSession = Depends(get_db)):
+    """Поиск товара для добавления в заказ (по названию)."""
+    stmt = select(Product).where(Product.is_visible == True, Product.is_deleted == False)
+    if q.strip():
+        stmt = stmt.where(Product.name.ilike(f"%{q.strip()}%"))
+    rows = (await db.execute(stmt.order_by(Product.name).limit(20))).scalars().all()
+    return {"products": [{"id": p.id, "name": p.name, "price": p.price} for p in rows]}
 
 
 # ─── Categories ───────────────────────────────────────────────────────────────

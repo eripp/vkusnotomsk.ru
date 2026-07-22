@@ -233,6 +233,9 @@ class Order(Base):
     __tablename__ = "orders"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Публичный номер заказа (YYMMDD-XXXX) — для клиента/оператора. id остаётся
+    # внутренним PK (FK, URL). Уникален.
+    order_number: Mapped[Optional[str]] = mapped_column(String(20), unique=True, index=True, nullable=True)
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     customer_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # имя из формы заказа
     phone: Mapped[str] = mapped_column(String(20))

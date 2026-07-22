@@ -136,7 +136,7 @@ async def notify_order_new(db: AsyncSession, order: Order) -> None:
     op_text = _operator_order_text(order, items)
     await _notify_operator(
         op_text,
-        email_subject=f"Новый заказ #{order.id} — {order.total_amount} ₽",
+        email_subject=f"Новый заказ {order.order_number or order.id} — {order.total_amount} ₽",
         email_html=_operator_order_email_html(order, items),
     )
 
@@ -154,7 +154,7 @@ async def notify_order_status(db: AsyncSession, order: Order) -> None:
     items = await _load_items(db, order.id)
     label = _STATUS_LABELS.get(order.status, order.status.value)
 
-    subject = f"Заказ #{order.id}: {label}"
+    subject = f"Заказ {order.order_number or order.id}: {label}"
     text    = _order_sms_text(order, items, subject)
     await _notify_user(user, ns, order, items, subject, text)
 
@@ -169,7 +169,7 @@ async def notify_order_canceled(db: AsyncSession, order: Order, reason: str = ""
         return
 
     ns   = await _get_ns(db, user.id)
-    text = f"Заказ #{order.id} отменён."
+    text = f"Заказ {order.order_number or order.id} отменён."
     if reason:
         text += f" Причина: {reason}"
 
@@ -178,8 +178,8 @@ async def notify_order_canceled(db: AsyncSession, order: Order, reason: str = ""
     if ns.tg_orders and user.tg_chat_id:
         await send_telegram(user.tg_chat_id, text)
     if ns.email_orders and user.email:
-        html = _simple_email_html(f"Заказ #{order.id} отменён", text)
-        await send_email(user.email, f"Заказ #{order.id} отменён — Вкусно Томск", html)
+        html = _simple_email_html(f"Заказ {order.order_number or order.id} отменён", text)
+        await send_email(user.email, f"Заказ {order.order_number or order.id} отменён — Вкусно Томск", html)
 
 
 # ─── Низкоуровневые отправщики ────────────────────────────────────────────────
@@ -395,7 +395,7 @@ async def _send_tg_by_phone(phone: str, text: str) -> None:
 # ─── Шаблоны текстов ──────────────────────────────────────────────────────────
 
 def _order_sms_text(order: Order, items: list[OrderItem], title: str) -> str:
-    lines = [title, f"Заказ #{order.id}"]
+    lines = [title, f"Заказ {order.order_number or order.id}"]
     for it in items:
         lines.append(f"• {it.product_name} ×{it.quantity}")
     lines.append(f"Итого: {order.total_amount} ₽")
@@ -404,7 +404,7 @@ def _order_sms_text(order: Order, items: list[OrderItem], title: str) -> str:
 
 
 def _operator_order_text(order: Order, items: list[OrderItem]) -> str:
-    lines = [f"🛍 <b>Новый заказ #{order.id}</b>"]
+    lines = [f"🛍 <b>Новый заказ {order.order_number or order.id}</b>"]
     lines.append(f"📱 {order.phone}")
     lines.append(f"📍 {order.address}")
     lines.append(f"🗓 {order.delivery_date} {order.slot_start}–{order.slot_end}")
@@ -432,9 +432,9 @@ def _operator_order_email_html(order: Order, items: list[OrderItem]) -> str:
     change = f"<p>Сдача с: <strong>{order.cash_change_from} ₽</strong></p>" if (
         order.payment_method.value == "cash" and order.cash_change_from) else ""
     return f"""<!DOCTYPE html>
-<html lang="ru"><head><meta charset="utf-8"><title>Новый заказ #{order.id}</title></head>
+<html lang="ru"><head><meta charset="utf-8"><title>Новый заказ {order.order_number or order.id}</title></head>
 <body style="font-family:sans-serif;color:#222;max-width:560px;margin:0 auto;padding:20px">
-  <h2 style="color:#ff6b2c">Новый заказ #{order.id}</h2>
+  <h2 style="color:#ff6b2c">Новый заказ {order.order_number or order.id}</h2>
   <p><strong>Телефон:</strong> {order.phone}</p>
   <p><strong>Адрес:</strong> {order.address}</p>
   <p><strong>Доставка:</strong> {order.delivery_date} {order.slot_start}–{order.slot_end}</p>
@@ -477,7 +477,7 @@ def _order_email_html(order: Order, items: list[OrderItem], title: str) -> str:
 <html lang="ru"><head><meta charset="utf-8"><title>{title}</title></head>
 <body style="font-family:sans-serif;color:#222;max-width:560px;margin:0 auto;padding:20px">
   <h2 style="color:#ff6b2c">{title}</h2>
-  <p>Заказ <strong>#{order.id}</strong></p>
+  <p>Заказ <strong>{order.order_number or order.id}</strong></p>
   <table width="100%" cellspacing="0" style="border-collapse:collapse;margin:16px 0">
     <thead>
       <tr style="background:#f5f5f5">

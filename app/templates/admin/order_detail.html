@@ -1,6 +1,6 @@
 {% extends "admin/base.html" %}
-{% block title %}Заказ #{{ order.id }}{% endblock %}
-{% block page_title %}Заказ #{{ order.id }}{% endblock %}
+{% block title %}Заказ {{ order.order_number or order.id }}{% endblock %}
+{% block page_title %}Заказ {{ order.order_number or order.id }}{% endblock %}
 {% set active = 'orders' %}
 
 {% block topbar_actions %}
@@ -43,30 +43,20 @@ async function copyOrderJson(id) {
   <!-- Левая колонка -->
   <div>
     <div class="adm-card">
-      <div class="adm-card-title">Состав заказа</div>
+      <div class="adm-card-title">Состав заказа <span style="font-weight:400;color:#aaa;font-size:12px">— можно редактировать</span></div>
       <div class="adm-table-wrap">
-        <table class="adm-table">
-          <thead><tr><th>Товар</th><th>Цена</th><th>Кол-во</th><th>Сумма</th></tr></thead>
-          <tbody>
-          {% for it in items %}
-          <tr>
-            <td>{{ it.product_name }}</td>
-            <td>{{ it.product_price }} ₽</td>
-            <td>{{ it.quantity }}</td>
-            <td>{{ it.line_total }} ₽</td>
-          </tr>
-          {% endfor %}
-          </tbody>
-          <tfoot>
-            {% if order.discount_amount %}<tr><td colspan="3" style="color:#888">Скидка</td><td style="color:#e53">−{{ order.discount_amount }} ₽</td></tr>{% endif %}
-            {% if order.cashback_spent %}<tr><td colspan="3" style="color:#888">Бонусы</td><td style="color:#e53">−{{ order.cashback_spent }} ₽</td></tr>{% endif %}
-            {% if order.delivery_price %}<tr><td colspan="3" style="color:#888">Доставка</td><td>{{ order.delivery_price }} ₽</td></tr>{% endif %}
-            <tr style="font-weight:700">
-              <td colspan="3" style="border-top:2px solid #f0f0f0">Итого</td>
-              <td style="border-top:2px solid #f0f0f0">{{ order.total_amount }} ₽</td>
-            </tr>
-          </tfoot>
+        <table class="adm-table" id="oe-table">
+          <thead><tr><th>Товар</th><th>Цена</th><th style="width:120px">Кол-во</th><th>Сумма</th><th style="width:36px"></th></tr></thead>
+          <tbody id="oe-items"></tbody>
+          <tfoot id="oe-foot"></tfoot>
         </table>
+      </div>
+      <!-- Добавить товар -->
+      <div style="margin-top:10px;position:relative">
+        <input id="oe-search" type="text" placeholder="Добавить товар — начните вводить название…"
+               autocomplete="off" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px">
+        <div id="oe-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:20;
+             background:#fff;border:1px solid #ddd;border-radius:8px;max-height:240px;overflow:auto;box-shadow:0 6px 20px rgba(0,0,0,.12)"></div>
       </div>
     </div>
 
@@ -78,8 +68,6 @@ async function copyOrderJson(id) {
           ('Телефон', order.phone),
           ('Адрес', order.address),
           ('Дата доставки', order.delivery_date ~ ' ' ~ order.slot_start.strftime('%H:%M') ~ '–' ~ order.slot_end.strftime('%H:%M')),
-          ('Способ оплаты', PAY_METHOD[order.payment_method.value]),
-          ('Сдача с', (order.cash_change_from ~ ' ₽') if order.cash_change_from else '—'),
           ('Приборы', order.persons_count),
           ('Статус оплаты', order.payment_status.value),
           ('YooKassa ID', order.yookassa_payment_id or '—'),
@@ -122,9 +110,144 @@ async function copyOrderJson(id) {
     </div>
 
     <div class="adm-card">
+      <div class="adm-card-title">Оплата</div>
+      <div class="adm-field" style="margin-bottom:10px">
+        <label>Вид оплаты</label>
+        <select id="oe-pay-method">
+          {% for k, label in PAY_METHOD.items() %}
+          <option value="{{ k }}" {% if k == order.payment_method.value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="adm-field" id="oe-change-block" style="margin-bottom:10px;{% if order.payment_method.value != 'cash' %}display:none{% endif %}">
+        <label>Сдача с</label>
+        <input id="oe-change" type="number" min="0" step="100" value="{{ order.cash_change_from or '' }}" placeholder="1000">
+      </div>
+      <button class="btn btn-primary" type="button" onclick="orderEdit.savePayment()">Сохранить оплату</button>
+      <span id="oe-pay-msg" style="margin-left:8px;font-size:13px;color:#1a7a1a"></span>
+    </div>
+
+    <div class="adm-card">
       <div class="adm-card-title">Комментарий клиента</div>
       <p style="color:#555;font-size:13px;line-height:1.5">{{ order.comment or '—' }}</p>
     </div>
   </div>
 </div>
+
+<script>
+const orderEdit = {
+  id: {{ order.id }},
+  delivery: {{ order.delivery_price }},
+  discount: {{ order.discount_amount }},
+  cashback: {{ order.cashback_spent }},
+
+  init(items) { this.render(items, {
+    goods_total: items.reduce((s,i)=>s+i.line_total,0),
+    delivery_price: this.delivery, discount_amount: this.discount,
+    cashback_spent: this.cashback,
+    total_amount: {{ order.total_amount }},
+  }); },
+
+  render(items, sums) {
+    const rub = n => (n||0).toLocaleString('ru') + ' ₽';
+    const tb = document.getElementById('oe-items');
+    tb.innerHTML = items.map(i => `
+      <tr>
+        <td>${this._esc(i.product_name)}</td>
+        <td>
+          <input type="number" min="0" step="1" value="${i.product_price}" style="width:70px;padding:3px 6px"
+                 onchange="orderEdit.updateItem(${i.id}, {price: this.value})"> ₽
+        </td>
+        <td>
+          <input type="number" min="0" value="${i.quantity}" style="width:64px;padding:3px 6px"
+                 onchange="orderEdit.updateItem(${i.id}, {quantity: this.value})">
+        </td>
+        <td>${rub(i.line_total)}</td>
+        <td><button type="button" title="Убрать" onclick="orderEdit.updateItem(${i.id}, {quantity: 0})"
+              style="color:#d00;font-size:16px;line-height:1;background:none;border:none;cursor:pointer">✕</button></td>
+      </tr>`).join('') || '<tr><td colspan="5" style="color:#aaa">Нет позиций</td></tr>';
+
+    const foot = document.getElementById('oe-foot');
+    let f = '';
+    if (sums.discount_amount) f += `<tr><td colspan="4" style="color:#888">Скидка</td><td style="color:#e53">−${rub(sums.discount_amount)}</td></tr>`;
+    if (sums.cashback_spent) f += `<tr><td colspan="4" style="color:#888">Бонусы</td><td style="color:#e53">−${rub(sums.cashback_spent)}</td></tr>`;
+    if (sums.delivery_price) f += `<tr><td colspan="4" style="color:#888">Доставка</td><td>${rub(sums.delivery_price)}</td></tr>`;
+    f += `<tr style="font-weight:700"><td colspan="4" style="border-top:2px solid #f0f0f0">Итого</td>
+          <td style="border-top:2px solid #f0f0f0">${rub(sums.total_amount)}</td></tr>`;
+    foot.innerHTML = f;
+  },
+
+  // upd = {quantity?, price?} — шлём только изменённое поле
+  async updateItem(itemId, upd) {
+    const body = {};
+    if (upd.quantity !== undefined) body.quantity = parseInt(upd.quantity) || 0;
+    if (upd.price !== undefined)    body.price = parseInt(upd.price) || 0;
+    const r = await fetch(`/admin/orders/${this.id}/items/${itemId}/qty`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (r.ok) { const d = await r.json(); this.render(d.items, d); }
+  },
+
+  async addProduct(pid) {
+    const r = await fetch(`/admin/orders/${this.id}/items/add`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ product_id: pid, quantity: 1 }),
+    });
+    if (r.ok) { const d = await r.json(); this.render(d.items, d); }
+    document.getElementById('oe-search').value = '';
+    document.getElementById('oe-suggest').style.display = 'none';
+  },
+
+  async savePayment() {
+    const method = document.getElementById('oe-pay-method').value;
+    const change = parseInt(document.getElementById('oe-change').value) || null;
+    const r = await fetch(`/admin/orders/${this.id}/payment`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ payment_method: method, cash_change_from: change }),
+    });
+    const msg = document.getElementById('oe-pay-msg');
+    msg.textContent = r.ok ? '✓ Сохранено' : '✗ Ошибка';
+    setTimeout(() => msg.textContent = '', 2000);
+  },
+
+  _esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; },
+};
+
+// вид оплаты → показ/скрытие «сдача с»
+document.getElementById('oe-pay-method').addEventListener('change', e => {
+  document.getElementById('oe-change-block').style.display = e.target.value === 'cash' ? '' : 'none';
+});
+
+// поиск товара для добавления (debounce)
+let _oeTimer = null;
+document.getElementById('oe-search').addEventListener('input', e => {
+  clearTimeout(_oeTimer);
+  const q = e.target.value.trim();
+  const box = document.getElementById('oe-suggest');
+  if (!q) { box.style.display = 'none'; return; }
+  _oeTimer = setTimeout(async () => {
+    const r = await fetch(`/admin/products/search?q=${encodeURIComponent(q)}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    box.innerHTML = d.products.map(p =>
+      `<div onclick="orderEdit.addProduct(${p.id})" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #f2f2f2"
+        onmouseover="this.style.background='#f7f7f7'" onmouseout="this.style.background='#fff'">
+        ${orderEdit._esc(p.name)} <span style="color:#888">— ${p.price} ₽</span></div>`
+    ).join('') || '<div style="padding:8px 10px;color:#aaa">Ничего не найдено</div>';
+    box.style.display = '';
+  }, 300);
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('#oe-search') && !e.target.closest('#oe-suggest'))
+    document.getElementById('oe-suggest').style.display = 'none';
+});
+
+// начальный рендер
+orderEdit.init([
+  {% for it in items %}
+  { id: {{ it.id }}, product_name: {{ it.product_name | tojson }}, product_price: {{ it.product_price }}, quantity: {{ it.quantity }}, line_total: {{ it.line_total }} }{% if not loop.last %},{% endif %}
+  {% endfor %}
+]);
+</script>
 {% endblock %}

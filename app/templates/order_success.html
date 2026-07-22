@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Заказ #{{ order.id }} принят · {{ site_name(request) }}{% endblock %}
+{% block title %}Заказ {{ order.order_number or order.id }} принят · {{ site_name(request) }}{% endblock %}
 {% block robots %}noindex, nofollow{% endblock %}
 
 {% block body %}
@@ -14,7 +14,7 @@
 <div class="order-success">
   <div class="os-icon">✅</div>
   <h1 class="os-title">Заказ принят!</h1>
-  <p class="os-subtitle">Номер заказа: <strong>#{{ order.id }}</strong></p>
+  <p class="os-subtitle">Номер заказа: <strong>{{ order.order_number or order.id }}</strong></p>
 
   <div class="os-details">
     <div class="os-row"><span>Адрес</span><span>{{ order.address }}</span></div>

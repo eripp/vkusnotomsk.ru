@@ -32,7 +32,7 @@
       <tbody>
       {% for o in orders %}
       <tr>
-        <td><a href="/admin/orders/{{ o.id }}" style="font-weight:600">#{{ o.id }}</a></td>
+        <td><a href="/admin/orders/{{ o.id }}" style="font-weight:600">{{ o.order_number or o.id }}</a></td>
         <td>{{ o.phone }}</td>
         <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ o.address }}">{{ o.address }}</td>
         <td style="white-space:nowrap">{{ o.delivery_date }}<br><small style="color:#888">{{ o.slot_start.strftime('%H:%M') }}–{{ o.slot_end.strftime('%H:%M') }}</small></td>

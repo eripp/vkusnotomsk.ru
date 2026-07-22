@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Заказ #{{ order.id }} — лист</title>
+  <title>Заказ {{ order.order_number or order.id }} — лист</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0 }
     body { font-family: system-ui, Arial, sans-serif; color: #000; font-size: 14px;
@@ -37,7 +37,7 @@
     <button onclick="window.close()">Закрыть</button>
   </div>
 
-  <h1>Заказ #{{ order.id }}</h1>
+  <h1>Заказ {{ order.order_number or order.id }}</h1>
   <div class="sub">Создан: {{ order.created_at.strftime('%d.%m.%Y %H:%M') }} · Статус: {{ STATUS_LABELS.get(order.status.value, order.status.value) }}</div>
 
   <div class="row">
