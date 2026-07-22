@@ -1,0 +1,51 @@
+{% extends "admin/base.html" %}
+{% block title %}SEO{% endblock %}
+{% block page_title %}SEO{% endblock %}
+{% set active = 'seo' %}
+
+{% block content %}
+{% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
+
+<div class="adm-card" style="margin-bottom:1rem">
+  <div class="adm-card-title">Заполненность метатегов</div>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr>
+      <td style="padding:6px 0;color:#888">Товары с meta_title</td>
+      <td style="padding:6px 0;font-weight:700">{{ prod_with_meta }} из {{ prod_total }}</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0;color:#888">Категории с meta_title</td>
+      <td style="padding:6px 0;font-weight:700">{{ cat_with_meta }} из {{ cat_total }}</td>
+    </tr>
+  </table>
+  <p class="adm-hint" style="color:#888;font-size:12px;margin-top:8px">
+    Метатеги правятся в карточке товара и категории (вкладка/блок «SEO»).
+    Если поле пустое — title и description генерируются автоматически из названия.
+  </p>
+</div>
+
+<div class="adm-card" style="margin-bottom:1rem">
+  <div class="adm-card-title">robots.txt</div>
+  <form method="post" action="/admin/seo">
+    <div class="adm-field">
+      <textarea name="robots_txt" rows="14" style="font-family:monospace;font-size:13px;width:100%"
+                placeholder="Пусто — используется стандартный robots.txt (закрыты /admin, /api/, /checkout, /pay/, /order/ + ссылка на sitemap)">{{ robots_txt }}</textarea>
+      <span style="color:#aaa;font-size:12px">
+        Пустое поле — отдаётся стандартный robots.txt. Проверить:
+        <a href="/robots.txt" target="_blank">/robots.txt</a>
+      </span>
+    </div>
+    <button class="btn btn-primary" type="submit" style="margin-top:10px">Сохранить</button>
+  </form>
+</div>
+
+<div class="adm-card">
+  <div class="adm-card-title">Полезные ссылки</div>
+  <p style="font-size:13px;line-height:1.8">
+    <a href="/sitemap.xml" target="_blank">sitemap.xml</a> — генерируется автоматически
+    (главная, контент-страницы, категории, товары)<br>
+    <a href="/robots.txt" target="_blank">robots.txt</a><br>
+    Коды подтверждения (Яндекс.Вебмастер) и счётчики — в разделе «Настройки».
+  </p>
+</div>
+{% endblock %}

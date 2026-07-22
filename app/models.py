@@ -68,6 +68,9 @@ class Category(Base):
     slug: Mapped[str] = mapped_column(String(120), unique=True)
     icon: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     show_icon: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # SEO: если пусто — метатеги генерируются автоматически из названия
+    meta_title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    meta_description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     is_visible: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -104,6 +107,9 @@ class Product(Base):
     name: Mapped[str] = mapped_column(String(200))
     slug: Mapped[str] = mapped_column(String(220), unique=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # SEO: если пусто — метатеги генерируются автоматически из названия
+    meta_title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    meta_description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     composition: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     price: Mapped[int] = mapped_column(Integer)  # rubles
     weight: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

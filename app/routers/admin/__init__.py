@@ -47,13 +47,28 @@ async def require_admin(
         ).scalar_one_or_none()
         if admin and admin.is_active:
             request.state.admin = admin   # доступно в _tmpl (роль для меню)
+            # Роль seo видит только SEO-разделы: товары, категории, SEO-настройки.
+            # Заказы, клиенты, кешбэк, отчёты, ключи API — скрыты (404), чтобы
+            # подрядчик не имел доступа к ПДн и деньгам.
+            if admin.role == "seo" and not _seo_path_allowed(request.url.path):
+                raise HTTPException(status_code=404, detail="Not Found")
             return admin
     # маскируемся под обычный 404 — никаких признаков существования админки
     raise HTTPException(status_code=404, detail="Not Found")
 
 
+# Разделы, доступные роли seo (префиксы путей внутри /admin)
+_SEO_ALLOWED_PREFIXES = ("/admin/seo", "/admin/products", "/admin/categories", "/admin/logout")
+
+
+def _seo_path_allowed(path: str) -> bool:
+    if path.rstrip("/") == "/admin":      # дашборд не пускаем — там выручка/заказы
+        return False
+    return path.startswith(_SEO_ALLOWED_PREFIXES)
+
+
 async def require_role_admin(admin: AdminUser = Depends(require_admin)) -> AdminUser:
-    """Разделы только для роли admin (API-ключи). Оператору — 404 (раздел скрыт)."""
+    """Разделы только для роли admin (API-ключи). Остальным — 404 (раздел скрыт)."""
     if admin.role != "admin":
         raise HTTPException(status_code=404, detail="Not Found")
     return admin
@@ -152,7 +167,8 @@ async def admin_login_submit(
     await db.commit()
     await audit.log_event(db, request, "admin_login", "ok", f"user={username[:40]}", user_id=admin.id)
 
-    resp = _r("/admin")
+    # роль seo не имеет доступа к дашборду — ведём сразу в SEO-раздел
+    resp = _r("/admin/seo" if admin.role == "seo" else "/admin")
     resp.set_cookie(
         key=admin_auth.ADMIN_COOKIE,
         value=admin_auth.create_admin_session(admin.id),
@@ -506,6 +522,46 @@ async def admin_product_search(q: str = "", db: AsyncSession = Depends(get_db)):
     return {"products": [{"id": p.id, "name": p.name, "price": p.price} for p in rows]}
 
 
+# ─── SEO ──────────────────────────────────────────────────────────────────────
+
+@router.get("/seo", response_class=HTMLResponse)
+async def admin_seo(request: Request, db: AsyncSession = Depends(get_db)):
+    """Раздел SEO: robots.txt + сводка по заполненности метатегов."""
+    rows = (await db.execute(select(SiteSetting).where(SiteSetting.key == "robots_txt"))).scalars().all()
+    robots_txt = rows[0].value if rows else ""
+    prod_total = (await db.execute(select(func.count(Product.id)).where(
+        Product.is_visible == True, Product.is_deleted == False))).scalar() or 0
+    prod_with_meta = (await db.execute(select(func.count(Product.id)).where(
+        Product.is_visible == True, Product.is_deleted == False,
+        Product.meta_title.isnot(None), Product.meta_title != ""))).scalar() or 0
+    cat_total = (await db.execute(select(func.count(Category.id)).where(Category.is_visible == True))).scalar() or 0
+    cat_with_meta = (await db.execute(select(func.count(Category.id)).where(
+        Category.is_visible == True, Category.meta_title.isnot(None), Category.meta_title != ""))).scalar() or 0
+    return _tmpl("admin/seo.html", request, {
+        "active": "seo",
+        "robots_txt": robots_txt,
+        "prod_total": prod_total, "prod_with_meta": prod_with_meta,
+        "cat_total": cat_total, "cat_with_meta": cat_with_meta,
+        "msg": request.query_params.get("msg"),
+    })
+
+
+@router.post("/seo")
+async def admin_seo_save(request: Request, db: AsyncSession = Depends(get_db)):
+    """Сохранение robots.txt."""
+    from app.services.settings import invalidate_settings_cache
+    form = await request.form()
+    value = str(form.get("robots_txt", ""))
+    row = (await db.execute(select(SiteSetting).where(SiteSetting.key == "robots_txt"))).scalar_one_or_none()
+    if row:
+        row.value = value
+    else:
+        db.add(SiteSetting(key="robots_txt", value=value))
+    await db.commit()
+    invalidate_settings_cache()
+    return _r("/admin/seo?msg=robots.txt+сохранён")
+
+
 # ─── Categories ───────────────────────────────────────────────────────────────
 
 @router.get("/categories", response_class=HTMLResponse)
@@ -522,6 +578,8 @@ class CategoryIn(BaseModel):
     slug: str
     icon: Optional[str] = None
     show_icon: bool = True
+    meta_title: Optional[str] = None
+    meta_description: Optional[str] = None
     sort_order: int = 0
     is_visible: bool = True
 
@@ -531,6 +589,8 @@ async def admin_category_create(payload: CategoryIn, db: AsyncSession = Depends(
     c = Category(
         name=payload.name, slug=payload.slug,
         icon=payload.icon, show_icon=payload.show_icon,
+        meta_title=(payload.meta_title or "").strip() or None,
+        meta_description=(payload.meta_description or "").strip() or None,
         sort_order=payload.sort_order,
         is_visible=payload.is_visible,
     )
@@ -553,6 +613,8 @@ async def admin_category_update(cat_id: int, payload: CategoryIn, db: AsyncSessi
     c.slug = payload.slug
     c.icon = payload.icon
     c.show_icon = payload.show_icon
+    c.meta_title = (payload.meta_title or "").strip() or None
+    c.meta_description = (payload.meta_description or "").strip() or None
     c.sort_order = payload.sort_order
     c.is_visible = payload.is_visible
     try:
@@ -711,6 +773,7 @@ async def admin_product_create(
     description: str = Form(""), composition: str = Form(""),
     kcal: str = Form(""), protein: str = Form(""), fat: str = Form(""), carbs: str = Form(""),
     weight: str = Form(""), sort_order: int = Form(0),
+    meta_title: str = Form(""), meta_description: str = Form(""),
     group_id: str = Form(""), group_new: str = Form(""),
     variant_label: str = Form(""), is_default: str = Form(""),
     is_visible: str = Form(""), label_popular: str = Form(""), label_new: str = Form(""),
@@ -744,6 +807,8 @@ async def admin_product_create(
         fat=float(fat) if fat else None,
         carbs=float(carbs) if carbs else None,
         weight=weight or None,
+        meta_title=meta_title.strip() or None,
+        meta_description=meta_description.strip() or None,
         sort_order=sort_order,
         group_id=gid,
         variant_label=(variant_label.strip() or None) if gid else None,
@@ -788,6 +853,7 @@ async def admin_product_update(
     price: int = Form(...), description: str = Form(""), composition: str = Form(""),
     kcal: str = Form(""), protein: str = Form(""), fat: str = Form(""), carbs: str = Form(""),
     weight: str = Form(""), sort_order: int = Form(0),
+    meta_title: str = Form(""), meta_description: str = Form(""),
     group_id: str = Form(""), group_new: str = Form(""),
     variant_label: str = Form(""), is_default: str = Form(""),
     is_visible: str = Form(""), label_popular: str = Form(""), label_new: str = Form(""),
@@ -833,6 +899,8 @@ async def admin_product_update(
     product.fat         = float(fat) if fat else None
     product.carbs       = float(carbs) if carbs else None
     product.weight      = weight or None
+    product.meta_title  = meta_title.strip() or None
+    product.meta_description = meta_description.strip() or None
     product.sort_order  = sort_order
     product.group_id    = gid
     product.variant_label = (variant_label.strip() or None) if gid else None

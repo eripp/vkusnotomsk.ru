@@ -32,7 +32,7 @@
       </span></td>
       <td>
         <div class="btn-group">
-          <button class="btn btn-sm btn-secondary" onclick='editCat({{ {"id": c.id, "name": c.name, "slug": c.slug, "icon": c.icon or "", "show_icon": c.show_icon, "sort_order": c.sort_order, "is_visible": c.is_visible} | tojson }})'>✏️</button>
+          <button class="btn btn-sm btn-secondary" onclick='editCat({{ {"id": c.id, "name": c.name, "slug": c.slug, "icon": c.icon or "", "show_icon": c.show_icon, "meta_title": c.meta_title or "", "meta_description": c.meta_description or "", "sort_order": c.sort_order, "is_visible": c.is_visible} | tojson }})'>✏️</button>
           <button class="btn btn-sm btn-danger" onclick="deleteCat({{ c.id }}, '{{ c.name }}')">🗑</button>
         </div>
       </td>
@@ -88,6 +88,8 @@ function openModal(data) {
   document.getElementById('cm-id').value = data ? data.id : '';
   document.getElementById('cm-name').value = data ? data.name : '';
   document.getElementById('cm-slug').value = data ? data.slug : '';
+  document.getElementById('cm-meta-title').value = data ? (data.meta_title || '') : '';
+  document.getElementById('cm-meta-desc').value  = data ? (data.meta_description || '') : '';
   const icon = data ? (data.icon || '') : '';
   document.getElementById('cm-icon').value = icon;
   document.getElementById('cm-show-icon').checked = data ? data.show_icon : true;
@@ -130,6 +132,8 @@ async function saveCat() {
     slug:       document.getElementById('cm-slug').value,
     icon:       document.getElementById('cm-icon').value || null,
     show_icon:  document.getElementById('cm-show-icon').checked,
+    meta_title:       document.getElementById('cm-meta-title').value || null,
+    meta_description: document.getElementById('cm-meta-desc').value || null,
     sort_order: parseInt(document.getElementById('cm-order').value) || 0,
     is_visible: document.getElementById('cm-visible').checked,
   };
@@ -186,6 +190,14 @@ async function deleteCat(id, name) {
       <div class="adm-field">
         <label>Slug * <span style="color:#aaa;font-weight:400">— url-адрес (/category/slug)</span></label>
         <input id="cm-slug" placeholder="goryachie-blyuda">
+      </div>
+      <div class="adm-field">
+        <label>SEO: meta title <span style="color:#aaa;font-weight:400">— пусто: генерируется из названия</span></label>
+        <input id="cm-meta-title" maxlength="255" placeholder="Категория — доставка по Томску · Вкусно">
+      </div>
+      <div class="adm-field">
+        <label>SEO: meta description</label>
+        <textarea id="cm-meta-desc" rows="2" maxlength="500" placeholder="Описание для поисковой выдачи (до ~160 символов)"></textarea>
       </div>
       <div class="adm-field-row">
         <div class="adm-field">

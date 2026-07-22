@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str = ""
     OPERATOR_USERNAME: str = "operator"
     OPERATOR_PASSWORD: str = ""
+    SEO_USERNAME: str = "seo"
+    SEO_PASSWORD: str = ""
 
 
 settings = Settings()

@@ -69,7 +69,8 @@ async def inject_site_settings(request: Request, call_next):
 
 @app.get("/robots.txt", response_class=Response)
 async def robots():
-    content = f"""User-agent: *
+    # Содержимое robots.txt можно переопределить в админке (настройка robots_txt).
+    default = f"""User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /api/
@@ -79,6 +80,15 @@ Disallow: /order/
 
 Sitemap: {settings.SITE_URL}/sitemap.xml
 """
+    content = default
+    try:
+        from app.services.settings import get_site_settings
+        from app.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            cfg = await get_site_settings(db)
+        content = (cfg.get("robots_txt") or "").strip() or default
+    except Exception:
+        pass
     return Response(content=content, media_type="text/plain")
 
 
@@ -100,6 +110,13 @@ async def sitemap(request: Request):
     urls = [
         f"<url><loc>{base}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>",
     ]
+    # статические контент-страницы
+    for path, prio in (("/delivery", "0.5"), ("/contacts", "0.5"),
+                       ("/offer", "0.3"), ("/privacy", "0.3")):
+        urls.append(
+            f"<url><loc>{base}{path}</loc>"
+            f"<changefreq>monthly</changefreq><priority>{prio}</priority></url>"
+        )
     for c in cats:
         urls.append(
             f"<url><loc>{base}/category/{c.slug}</loc>"

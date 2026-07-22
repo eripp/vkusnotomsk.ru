@@ -59,6 +59,16 @@
         <label>Состав</label>
         <textarea name="composition" rows="3">{{ product.composition if product else '' }}</textarea>
       </div>
+      <div class="adm-field">
+        <label>SEO: meta title <span style="color:#aaa;font-weight:400">— пусто: генерируется из названия</span></label>
+        <input name="meta_title" value="{{ product.meta_title or '' if product else '' }}" maxlength="255"
+               placeholder="Название товара — купить с доставкой · Вкусно Томск">
+      </div>
+      <div class="adm-field">
+        <label>SEO: meta description <span style="color:#aaa;font-weight:400">— пусто: берётся описание</span></label>
+        <textarea name="meta_description" rows="2" maxlength="500"
+                  placeholder="Краткое описание для поисковой выдачи (до ~160 символов)">{{ product.meta_description or '' if product else '' }}</textarea>
+      </div>
     </div>
   </div>
 

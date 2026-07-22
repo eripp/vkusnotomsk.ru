@@ -117,13 +117,16 @@
 <body>
 
 <aside class="adm-sidebar">
-  <a href="/admin" class="adm-logo">⚡ Вкусно · Админ</a>
+  <a href="{% if role == 'seo' %}/admin/seo{% else %}/admin{% endif %}" class="adm-logo">⚡ Вкусно · Админ</a>
   <nav class="adm-nav">
+    {% if role != 'seo' %}
     <div class="nav-section">Продажи</div>
     <a href="/admin/orders" {% if active == 'orders' %}class="active"{% endif %}>📋 Заказы</a>
+    {% endif %}
     <div class="nav-section">Каталог</div>
     <a href="/admin/products" {% if active == 'products' %}class="active"{% endif %}>🍱 Товары</a>
     <a href="/admin/categories" {% if active == 'categories' %}class="active"{% endif %}>📁 Категории</a>
+    {% if role != 'seo' %}
     <a href="/admin/stories" {% if active == 'stories' %}class="active"{% endif %}>📖 Сторис</a>
     <div class="nav-section">Клиенты</div>
     <a href="/admin/users" {% if active == 'users' %}class="active"{% endif %}>👤 Пользователи</a>
@@ -134,10 +137,17 @@
     <a href="/admin/zones" {% if active == 'zones' %}class="active"{% endif %}>🗺 Зоны доставки</a>
     <a href="/admin/schedule" {% if active == 'schedule' %}class="active"{% endif %}>🕐 Расписание</a>
     <a href="/admin/settings" {% if active == 'settings' %}class="active"{% endif %}>⚙️ Настройки</a>
+    {% endif %}
+    {% if role in ('admin', 'seo') %}
+    {% if role == 'seo' %}<div class="nav-section">SEO</div>{% endif %}
+    <a href="/admin/seo" {% if active == 'seo' %}class="active"{% endif %}>🔍 SEO</a>
+    {% endif %}
     {% if role == 'admin' %}
     <a href="/admin/api-settings" {% if active == 'api-settings' %}class="active"{% endif %}>🔑 Ключи API</a>
     {% endif %}
+    {% if role != 'seo' %}
     <a href="/admin/audit" {% if active == 'audit' %}class="active"{% endif %}>🛡 Аудит</a>
+    {% endif %}
   </nav>
   <div class="adm-sidebar-footer">
     <a href="/" target="_blank">← Сайт</a>

@@ -3,8 +3,9 @@
 
 {% block og_type %}{% if open_product %}product{% else %}website{% endif %}{% endblock %}
 
-{% block og_image %}{% if open_product and open_product.image %}{{ SITE_URL }}/media/{{ open_product.image }}{% else %}{{ SITE_URL }}/static/img/og-default.jpg{% endif %}{% endblock %}
-{% block tw_image %}{% if open_product and open_product.image %}{{ SITE_URL }}/media/{{ open_product.image }}{% else %}{{ SITE_URL }}/static/img/og-default.jpg{% endif %}{% endblock %}
+{# open_product.image уже содержит абсолютный путь от корня (/media/...) — второй раз /media/ не добавляем #}
+{% block og_image %}{% if open_product and open_product.image %}{{ SITE_URL }}{{ open_product.image }}{% else %}{{ SITE_URL }}/static/img/og-default.jpg{% endif %}{% endblock %}
+{% block tw_image %}{% if open_product and open_product.image %}{{ SITE_URL }}{{ open_product.image }}{% else %}{{ SITE_URL }}/static/img/og-default.jpg{% endif %}{% endblock %}
 
 {% block structured_data %}
 {% if open_product %}
@@ -14,7 +15,7 @@
   "@type": "Product",
   "name": "{{ open_product.name | e }}",
   "description": "{{ (open_product.description or open_product.name) | e }}",
-  {% if open_product.image %}"image": "{{ SITE_URL }}/media/{{ open_product.image }}",{% endif %}
+  {% if open_product.image %}"image": "{{ SITE_URL }}{{ open_product.image }}",{% endif %}
   "offers": {
     "@type": "Offer",
     "priceCurrency": "RUB",

@@ -89,4 +89,5 @@ async def seed_admin(db: AsyncSession) -> None:
         logger.warning("[admin] ADMIN_PASSWORD не задан — вход администратора отключён")
     await _seed_user(db, settings.ADMIN_USERNAME or "admin", settings.ADMIN_PASSWORD, "admin")
     await _seed_user(db, settings.OPERATOR_USERNAME or "operator", settings.OPERATOR_PASSWORD, "operator")
+    await _seed_user(db, settings.SEO_USERNAME or "seo", settings.SEO_PASSWORD, "seo")
     await db.commit()

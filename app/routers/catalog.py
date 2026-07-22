@@ -219,6 +219,9 @@ async def _get_product_detail(db: AsyncSession, slug: str) -> dict | None:
     data["variants"] = variants
     data["recommendations"] = recommendations
     data["available"] = bool(p.is_visible)   # неактивный товар нельзя заказать
+    # SEO-поля из админки (пусто → метатеги генерируются автоматически)
+    data["meta_title"] = p.meta_title
+    data["meta_description"] = p.meta_description
     return data
 
 
@@ -317,8 +320,11 @@ async def category_page(request: Request, slug: str, db: AsyncSession = Depends(
         "popular": [p for p in products if p["label_popular"]],
         "category_groups": _group_by_category(categories, products),
         "active_category": slug,
-        "meta_title": f"{cat_name} — доставка по Томску · Вкусно",
-        "meta_desc": f"Заказать {cat_name.lower()} с доставкой по Томску. Быстро, вкусно, горячо!",
+        # SEO из админки (если задано), иначе — автогенерация
+        "meta_title": (getattr(cat, "meta_title", None) or "").strip()
+                      or f"{cat_name} — доставка по Томску · Вкусно",
+        "meta_desc": (getattr(cat, "meta_description", None) or "").strip()
+                     or f"Заказать {cat_name.lower()} с доставкой по Томску. Быстро, вкусно, горячо!",
         "stories": stories,
         "stories_json": stories,
         "free_delivery_from": await _free_delivery_from(db),
@@ -333,9 +339,11 @@ async def product_page(request: Request, slug: str, db: AsyncSession = Depends(g
     if not product:
         raise HTTPException(status_code=404, detail="Товар не найден")
 
-    # SEO мета
-    meta_title = f"{product['name']} {product['weight'] or ''} — купить с доставкой · Вкусно Томск".strip()
-    meta_desc  = product["description"] or meta_title
+    # SEO мета: из админки (если заданы), иначе — автогенерация
+    meta_title = (product.get("meta_title") or "").strip() \
+        or f"{product['name']} {product['weight'] or ''} — купить с доставкой · Вкусно Томск".strip()
+    meta_desc = (product.get("meta_description") or "").strip() \
+        or product["description"] or meta_title
 
     stories = await get_active_stories(db)
     return templates.TemplateResponse("index.html", {
