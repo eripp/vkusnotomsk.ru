@@ -103,6 +103,7 @@
           </div>
         </div>
         <div id="schedule-error" class="co-error" style="display:none">На выбранную дату доставка недоступна</div>
+        <div id="date-notice" class="co-date-notice" style="display:none"></div>
         <div class="co-field" style="margin-top:8px">
           <label for="f-persons">Количество приборов</label>
           <input id="f-persons" type="number" min="0" max="100" step="1" value="0">
@@ -181,6 +182,7 @@
         <div class="co-summary-row"><span>Товары</span><span id="s-subtotal"></span></div>
         <div class="co-summary-row" id="s-delivery-row"><span>Доставка</span><span id="s-delivery"></span></div>
         <div class="co-summary-row co-summary-total"><span>Итого</span><span id="s-total"></span></div>
+        <div id="s-when" class="co-summary-when" style="display:none"></div>
         <div id="s-min-warn" class="co-warn" style="display:none"></div>
       </div>
     </div>
@@ -432,7 +434,11 @@ const checkout = {
     try {
       const res = await fetch('/api/schedule/available-days');
       const data = await res.json();
-      this.availableDays = (data.days || []).filter(d => d.has_slots).map(d => d.date);
+      const days = data.days || [];
+      // days[0] — сегодня по Томску (UTC+7). Берём дату с сервера, а не из
+      // часов браузера: покупатель может быть в другом часовом поясе.
+      this.todayTomsk = days.length ? days[0].date : null;
+      this.availableDays = days.filter(d => d.has_slots).map(d => d.date);
     } catch { /* оставим пусто — покажем сообщение ниже */ }
 
     if (!this.availableDays.length) {
@@ -445,6 +451,7 @@ const checkout = {
     inp.max = this.availableDays[this.availableDays.length - 1];
     inp.value = this.availableDays[0];
     inp.addEventListener('change', () => {
+      this._updateDateNotice();
       if (!this.availableDays.includes(inp.value)) {
         if (errEl) { errEl.textContent = 'На выбранную дату доставка недоступна'; errEl.style.display = ''; }
         document.getElementById('f-slot').innerHTML = '<option value="">Нет доступных слотов</option>';
@@ -452,7 +459,80 @@ const checkout = {
       }
       this._loadSlots();
     });
+    this._updateDateNotice();
     this._loadSlots();
+  },
+
+  // Дата подставляется автоматически и часто это НЕ сегодня (сегодняшние слоты
+  // уже прошли). Явно проговариваем день, чтобы покупатель не ждал доставку сегодня.
+  _updateDateNotice() {
+    const box = document.getElementById('date-notice');
+    const val = document.getElementById('f-date')?.value;
+    if (!box) return;
+    if (!val || !this.todayTomsk) { box.style.display = 'none'; return; }
+
+    const isToday = val === this.todayTomsk;
+    box.classList.toggle('today', isToday);
+
+    if (isToday) {
+      box.innerHTML =
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"' +
+        ' stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' +
+        '<span><b>Доставка сегодня</b>' + this._noticeWhen(val, true) + '</span>';
+    } else {
+      box.innerHTML =
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"' +
+        ' stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/>' +
+        '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>' +
+        '<span><b>Внимание: доставка не сегодня</b>' + this._noticeWhen(val, false) + '</span>';
+    }
+    box.style.display = '';
+    this._updateSummaryWhen(val, isToday);
+  },
+
+  // Дублируем день доставки в панели заказа — это последнее, что видят перед оплатой.
+  _updateSummaryWhen(val, isToday) {
+    const el = document.getElementById('s-when');
+    if (!el) return;
+    const MONTHS = ['января','февраля','марта','апреля','мая','июня',
+                    'июля','августа','сентября','октября','ноября','декабря'];
+    const WD = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+    const [y, m, d] = val.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    const [ty, tm, td] = this.todayTomsk.split('-').map(Number);
+    const diff = Math.round((dt - new Date(ty, tm - 1, td)) / 86400000);
+    const when = isToday ? 'сегодня'
+               : diff === 1 ? 'завтра'
+               : diff === 2 ? 'послезавтра'
+               : WD[dt.getDay()];
+
+    const slotEl = document.getElementById('f-slot');
+    const slotTxt = slotEl && slotEl.value ? slotEl.options[slotEl.selectedIndex].text : '';
+    el.className = 'co-summary-when' + (isToday ? '' : ' later');
+    el.innerHTML = 'Доставка: <b>' + when + '</b>, ' + d + ' ' + MONTHS[m - 1] +
+                   (slotTxt ? ', ' + slotTxt : '');
+    el.style.display = '';
+  },
+
+  // «завтра, в четверг 23 июля» / «сегодня, 22 июля»
+  _noticeWhen(val, isToday) {
+    const MONTHS = ['января','февраля','марта','апреля','мая','июня',
+                    'июля','августа','сентября','октября','ноября','декабря'];
+    const WD = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+    const [y, m, d] = val.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    const human = d + ' ' + MONTHS[m - 1];
+    if (isToday) return 'Привезём сегодня, ' + human + '.';
+
+    // разница в днях относительно «сегодня» по Томску
+    const [ty, tm, td] = this.todayTomsk.split('-').map(Number);
+    const diff = Math.round((dt - new Date(ty, tm - 1, td)) / 86400000);
+    const when = diff === 1 ? 'завтра' : (diff === 2 ? 'послезавтра' : 'в ' + WD[dt.getDay()]);
+    // «сегодня уже недоступна» — только если сегодня действительно без слотов
+    // (иначе покупатель выбрал другой день сам, и это была бы неправда)
+    const todayClosed = !this.availableDays.includes(this.todayTomsk);
+    return 'Заказ привезём ' + when + ', ' + human + '.' +
+           (todayClosed ? ' Сегодня доставка уже недоступна.' : '');
   },
 
   async _loadSlots() {
@@ -471,6 +551,11 @@ const checkout = {
         document.getElementById('schedule-error').style.display = 'none';
         sel.innerHTML = '<option value="">— выберите —</option>' +
           this.slots.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+      }
+      // выбор слота дописывается в строку «Доставка: …» в панели заказа
+      if (!sel.dataset.whenBound) {
+        sel.addEventListener('change', () => this._updateDateNotice());
+        sel.dataset.whenBound = '1';
       }
     } catch {
       const sel = document.getElementById('f-slot');
