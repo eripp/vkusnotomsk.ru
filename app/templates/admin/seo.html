@@ -39,11 +39,32 @@
   </form>
 </div>
 
+<div class="adm-card" style="margin-bottom:1rem">
+  <div class="adm-card-title">Товарный фид (YML) — Яндекс и 2ГИС</div>
+  <p class="adm-hint" style="color:#888;font-size:12px;margin-bottom:12px">
+    Весь видимый каталог в формате YML: <a href="/feed" target="_blank">/feed</a>.
+    Отдаётся автоматически — эту ссылку указывают в кабинете Яндекс.Бизнеса / 2ГИС.
+    Ниже — поля, которые в каталоге не хранятся и задаются для фида.
+  </p>
+  <form method="post" action="/admin/seo/feed">
+    <div class="adm-field" style="max-width:340px">
+      <label>Телефон в фиде</label>
+      <input name="feed_phone" value="{{ feed_phone }}" placeholder="+7 (3822) 713-100">
+    </div>
+    <div class="adm-field" style="max-width:220px;margin-top:10px">
+      <label>Стоимость доставки, ₽ <span style="color:#aaa;font-weight:400">— для тега delivery-options</span></label>
+      <input name="feed_delivery_cost" type="number" min="0" value="{{ feed_delivery_cost }}" placeholder="80">
+    </div>
+    <button class="btn btn-primary" type="submit" style="margin-top:12px">Сохранить</button>
+  </form>
+</div>
+
 <div class="adm-card">
   <div class="adm-card-title">Полезные ссылки</div>
   <p style="font-size:13px;line-height:1.8">
     <a href="/sitemap.xml" target="_blank">sitemap.xml</a> — генерируется автоматически
     (главная, контент-страницы, категории, товары)<br>
+    <a href="/feed" target="_blank">/feed</a> — товарный фид YML (Яндекс, 2ГИС)<br>
     <a href="/robots.txt" target="_blank">robots.txt</a><br>
     Коды подтверждения (Яндекс.Вебмастер) и счётчики — в разделе «Настройки».
   </p>

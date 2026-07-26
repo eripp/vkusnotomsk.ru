@@ -137,6 +137,117 @@ async def sitemap(request: Request):
     return Response(content=xml, media_type="application/xml")
 
 
+@app.get("/feed", response_class=Response)
+@app.get("/feed.xml", response_class=Response)
+async def yml_feed():
+    """YML-фид (Yandex Market Language) для Яндекс.Еды/Бизнеса и 2ГИС.
+
+    Отдаёт весь видимый каталог: категории деревом + офферы с ценой, картинкой,
+    весом и КБЖУ. Телефон и стоимость доставки для фида берутся из админ-настроек
+    (feed_phone, feed_delivery_cost), значения по умолчанию — как в примере ТЗ.
+    """
+    from xml.sax.saxutils import escape, quoteattr
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.database import AsyncSessionLocal
+    from app.models import Category, Product
+    from app.services.settings import get_site_settings
+    from app.services.schedule_svc import now_tomsk
+    from app.routers.catalog import _media_url
+
+    base = settings.SITE_URL.rstrip("/")
+
+    async with AsyncSessionLocal() as db:
+        cfg = await get_site_settings(db)
+        cats = (await db.execute(
+            select(Category).where(Category.is_visible == True).order_by(Category.sort_order)
+        )).scalars().all()
+        products = (await db.execute(
+            select(Product)
+            .where(Product.is_visible == True, Product.is_deleted == False, Product.price > 0)
+            .order_by(Product.sort_order, Product.id)
+            .options(selectinload(Product.images))
+        )).scalars().all()
+
+    phone = (cfg.get("feed_phone") or "").strip() or "+7 (3822) 713-100"
+    try:
+        delivery_cost = int(float(cfg.get("feed_delivery_cost") or 80))
+    except (TypeError, ValueError):
+        delivery_cost = 80
+
+    # Категории отдаём только те, в которых есть офферы (пустые Яндекс/2ГИС не любят).
+    cat_ids_with_offers = {p.category_id for p in products}
+    cat_by_id = {c.id: c for c in cats}
+    visible_cat_ids = {cid for cid in cat_ids_with_offers if cid in cat_by_id}
+
+    cat_xml = "".join(
+        f'<category id="{c.id}">{escape(c.name)}</category>'
+        for c in cats if c.id in visible_cat_ids
+    )
+
+    def _abs_img(p: Product) -> str | None:
+        imgs = sorted(p.images, key=lambda i: i.sort_order)
+        if not imgs:
+            return None
+        url = _media_url(imgs[0].url)
+        if not url:
+            return None
+        return url if url.startswith(("http://", "https://")) else base + url
+
+    offers = []
+    for p in products:
+        if p.category_id not in visible_cat_ids:
+            continue
+        parts = [
+            f'<offer id="{p.id}" available="true">',
+            f"<url>{escape(base)}/product/{escape(p.slug)}</url>",
+            f"<price>{p.price}</price>",
+            '<currencyId>RUB</currencyId>',
+            f"<categoryId>{p.category_id}</categoryId>",
+        ]
+        img = _abs_img(p)
+        if img:
+            parts.append(f"<picture>{escape(img)}</picture>")
+        parts.append(f"<name>{escape(p.name)}</name>")
+        desc = (p.meta_description or p.description or "").strip()
+        if desc:
+            parts.append(f"<description>{escape(desc)}</description>")
+        if p.weight:
+            parts.append(f"<param name=\"Вес\">{escape(str(p.weight))}</param>")
+        for label, val, unit in (
+            ("Калорийность", p.kcal, "ккал"),
+            ("Белки", p.protein, "г"),
+            ("Жиры", p.fat, "г"),
+            ("Углеводы", p.carbs, "г"),
+        ):
+            if val is not None:
+                num = f"{float(val):g}"
+                parts.append(f'<param name={quoteattr(label)} unit={quoteattr(unit)}>{num}</param>')
+        parts.append("</offer>")
+        offers.append("".join(parts))
+
+    date_attr = now_tomsk().strftime("%Y-%m-%d %H:%M")
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<yml_catalog date="{date_attr}">'
+        "<shop>"
+        '<name>Фабрика "Вкусно"</name>'
+        '<company>Фабрика "Вкусно"</company>'
+        f"<url>{escape(base)}</url>"
+        "<platform>vkusnotomsk.ru</platform>"
+        "<version>1.0</version>"
+        f"<phone>{escape(phone)}</phone>"
+        '<currencies><currency id="RUB" rate="1"/></currencies>'
+        f"<categories>{cat_xml}</categories>"
+        f'<delivery-options><option cost="{delivery_cost}" days="0"/></delivery-options>'
+        f"<offers>{''.join(offers)}</offers>"
+        "</shop>"
+        "</yml_catalog>"
+    )
+    return Response(content=xml, media_type="application/xml; charset=utf-8")
+
+
 app.include_router(catalog.router)
 app.include_router(cart.router, prefix="/api")
 app.include_router(orders_pages_router)            # /checkout, /order/{id}

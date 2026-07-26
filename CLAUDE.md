@@ -34,7 +34,7 @@ docker compose exec web python seed_catalog.py      # мини-каталог-з
 
 ```
 app/
-├── main.py            # FastAPI app, подключение роутеров, middleware site_settings, robots.txt, sitemap.xml
+├── main.py            # FastAPI app, подключение роутеров, middleware site_settings, robots.txt, sitemap.xml, /feed (YML для Яндекс/2ГИС)
 ├── models.py          # все SQLAlchemy-модели (источник правды по схеме БД)
 ├── config.py          # Settings (pydantic-settings, читает .env)
 ├── database.py        # async engine, AsyncSessionLocal, get_db()
@@ -72,6 +72,7 @@ media/                 # загруженные фото (WebP), отдаёт ng
 - **Админка `/admin/`** защищена: гард `require_admin` на роутере → любой `/admin/*` без сессии отдаёт **404**. Вход через секретный префикс `/admin/login/<ADMIN_URL_SECRET>` + логин/пароль (`AdminUser`, bcrypt). Креды/секрет — в `.env`, учётки засеваются на старте (`seed_admin`): `ADMIN_USERNAME`/`ADMIN_PASSWORD` (роль `admin`) и `OPERATOR_USERNAME`/`OPERATOR_PASSWORD` (роль `operator`). Логика — `app/services/admin_auth.py`, роуты входа — `auth_router`.
 - **Роли админки** (`AdminUser.role`): `admin` — полный доступ; `operator` — всё, кроме раздела «Ключи API» (`/admin/api-settings` — API-ключи интеграций), который закрыт `require_role_admin` → оператору **404**, пункт меню скрыт; `seo` — **только** `/admin/seo`, `/admin/products`, `/admin/categories` (белый список `_SEO_ALLOWED_PREFIXES` в `require_admin`), всё остальное, включая дашборд `/admin`, → **404**; после входа редиректится на `/admin/seo`. Роль в шаблонах — переменная `role` (проставляется в `_tmpl` из `request.state.admin`). Общие настройки (`/admin/settings`) доступны `admin` и `operator`.
 - **SEO-поля:** у `Product` и `Category` есть `meta_title`/`meta_description`. Пустое значение = метатеги генерируются автоматически (см. фолбэки в `catalog.py`), поэтому в шаблоны эти поля идут уже «схлопнутыми». `robots.txt` переопределяется настройкой `robots_txt` в БД (`/admin/seo`), пустая → захардкоженный дефолт в `main.py`.
+- **Товарный фид `/feed`** (YML для Яндекс/2ГИС, роут в `main.py`): весь видимый каталог, категории с офферами. Телефон и стоимость доставки — из настроек `feed_phone`/`feed_delivery_cost` (правятся в `/admin/seo`, дефолты `+7 (3822) 713-100` / `80`), т.к. этих полей в каталоге нет.
 - **Кнопки «Сохранить/Отмена»** в полностраничных карточках редактирования (товары, сторис, настройки) вынесены в sticky-`.adm-topbar` и сабмитят форму через атрибут `form="<id>"`. Модальные карточки (промокоды, расписание, зоны) — кнопки внутри `.adm-modal-bg` (`position: fixed`).
 - **Стиль кода:** комментарии и сообщения для пользователя — на русском, как в существующем коде. Async везде (`AsyncSession`, `await`). Деньги/время — по правилам выше.
 

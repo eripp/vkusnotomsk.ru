@@ -524,11 +524,23 @@ async def admin_product_search(q: str = "", db: AsyncSession = Depends(get_db)):
 
 # ─── SEO ──────────────────────────────────────────────────────────────────────
 
+async def _get_settings(db: AsyncSession, keys: tuple[str, ...]) -> dict[str, str]:
+    rows = (await db.execute(select(SiteSetting).where(SiteSetting.key.in_(keys)))).scalars().all()
+    return {r.key: r.value for r in rows}
+
+
+async def _upsert_setting(db: AsyncSession, key: str, value: str) -> None:
+    row = (await db.execute(select(SiteSetting).where(SiteSetting.key == key))).scalar_one_or_none()
+    if row:
+        row.value = value
+    else:
+        db.add(SiteSetting(key=key, value=value))
+
+
 @router.get("/seo", response_class=HTMLResponse)
 async def admin_seo(request: Request, db: AsyncSession = Depends(get_db)):
-    """Раздел SEO: robots.txt + сводка по заполненности метатегов."""
-    rows = (await db.execute(select(SiteSetting).where(SiteSetting.key == "robots_txt"))).scalars().all()
-    robots_txt = rows[0].value if rows else ""
+    """Раздел SEO: robots.txt, товарный фид (YML) + сводка по заполненности метатегов."""
+    cfg = await _get_settings(db, ("robots_txt", "feed_phone", "feed_delivery_cost"))
     prod_total = (await db.execute(select(func.count(Product.id)).where(
         Product.is_visible == True, Product.is_deleted == False))).scalar() or 0
     prod_with_meta = (await db.execute(select(func.count(Product.id)).where(
@@ -539,7 +551,9 @@ async def admin_seo(request: Request, db: AsyncSession = Depends(get_db)):
         Category.is_visible == True, Category.meta_title.isnot(None), Category.meta_title != ""))).scalar() or 0
     return _tmpl("admin/seo.html", request, {
         "active": "seo",
-        "robots_txt": robots_txt,
+        "robots_txt": cfg.get("robots_txt", ""),
+        "feed_phone": cfg.get("feed_phone", "") or "+7 (3822) 713-100",
+        "feed_delivery_cost": cfg.get("feed_delivery_cost", "") or "80",
         "prod_total": prod_total, "prod_with_meta": prod_with_meta,
         "cat_total": cat_total, "cat_with_meta": cat_with_meta,
         "msg": request.query_params.get("msg"),
@@ -551,15 +565,28 @@ async def admin_seo_save(request: Request, db: AsyncSession = Depends(get_db)):
     """Сохранение robots.txt."""
     from app.services.settings import invalidate_settings_cache
     form = await request.form()
-    value = str(form.get("robots_txt", ""))
-    row = (await db.execute(select(SiteSetting).where(SiteSetting.key == "robots_txt"))).scalar_one_or_none()
-    if row:
-        row.value = value
-    else:
-        db.add(SiteSetting(key="robots_txt", value=value))
+    await _upsert_setting(db, "robots_txt", str(form.get("robots_txt", "")))
     await db.commit()
     invalidate_settings_cache()
     return _r("/admin/seo?msg=robots.txt+сохранён")
+
+
+@router.post("/seo/feed")
+async def admin_seo_feed_save(request: Request, db: AsyncSession = Depends(get_db)):
+    """Сохранение настроек товарного фида (/feed): телефон и стоимость доставки."""
+    from app.services.settings import invalidate_settings_cache
+    form = await request.form()
+    phone = str(form.get("feed_phone", "")).strip()
+    cost_raw = str(form.get("feed_delivery_cost", "")).strip()
+    try:
+        cost = str(max(0, int(float(cost_raw)))) if cost_raw else ""
+    except ValueError:
+        cost = ""
+    await _upsert_setting(db, "feed_phone", phone)
+    await _upsert_setting(db, "feed_delivery_cost", cost)
+    await db.commit()
+    invalidate_settings_cache()
+    return _r("/admin/seo?msg=Настройки+фида+сохранены")
 
 
 # ─── Categories ───────────────────────────────────────────────────────────────
