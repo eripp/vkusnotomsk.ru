@@ -8,6 +8,13 @@
 <a href="/admin/stories" class="btn btn-secondary btn-sm">Отмена</a>
 {% endblock %}
 
+{% block head %}
+<style>
+  .sl-hint { margin-top: 6px; font-size: 12px; line-height: 1.5; color: #888; }
+  .sl-hint b { color: #555; }
+</style>
+{% endblock %}
+
 {% block content %}
 {% if error %}<div class="adm-alert adm-alert-err">{{ error }}</div>{% endif %}
 {% if msg %}<div class="adm-alert adm-alert-ok">{{ msg }}</div>{% endif %}
@@ -36,6 +43,10 @@
       <div class="adm-field">
         <label>Обложка (cover)</label>
         <input type="file" name="cover" accept="image/*">
+        <p class="sl-hint">
+          Превью на главной — вертикальный кружок <b>4:5</b> (например 320 × 400 px).
+          Обрезается по центру. Можно взять кадр из первого слайда.
+        </p>
       </div>
       {% if story and story.cover_image %}
       <div>
@@ -116,6 +127,12 @@
         <div class="adm-field">
           <label>Изображение *</label>
           <input type="file" name="image" accept="image/*" id="sl-image-file" required>
+          <p class="sl-hint">
+            Вертикальное фото <b>1080 × 1920 px (9:16)</b>, как в Instagram-сторис.
+            Кадр показывается на весь экран и обрезается по краям под 9:16.
+            Главное (лица, товар) держите в верхних&nbsp;60%: нижнюю треть перекрывают
+            затемнение, текст и кнопка.
+          </p>
           <div id="sl-current-img" style="margin-top:6px"></div>
         </div>
         <div class="adm-field"><label>Текст на слайде</label>
