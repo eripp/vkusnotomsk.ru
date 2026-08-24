@@ -62,6 +62,21 @@ async def send_otp_code(phone: str, code: str, channel: OtpChannel) -> bool:
     return False
 
 
+async def send_sms(phone: str, text: str) -> bool:
+    """Отправка произвольного SMS на номер (не OTP): подтверждение заказа и т.п.
+    Тот же шлюз, что и у кодов: основной — Plusofon, запасной — SMS.RU."""
+    if not phone:
+        return False
+    try:
+        from app.services import plusofon
+        if await plusofon.is_configured():
+            return await plusofon.send_plusofon(phone, text)
+        return await send_sms_ru(phone, text)
+    except Exception as e:
+        logger.warning("[SMS] не удалось отправить на %s: %s", phone, e)
+        return False
+
+
 async def send_sms_ru(phone: str, text: str) -> bool:
     """Отправка SMS через SMS.RU (https://sms.ru/sms/send).
     api_id — из настроек админки (приоритет), иначе из .env.
@@ -126,7 +141,11 @@ async def notify_order_new(db: AsyncSession, order: Order) -> None:
     items = await _load_items(db, order.id)
     user  = await _load_user(db, order.user_id) if order.user_id else None
 
-    # Клиенту
+    # Клиенту — SMS на указанный при заказе номер (для всех заказов, в т.ч. гостевых)
+    if order.phone:
+        await send_sms(order.phone, _order_confirm_sms(order))
+
+    # Зарегистрированному клиенту — доп. каналы по его настройкам (email/MAX/TG)
     if user:
         ns = await _get_ns(db, user.id)
         text = _order_sms_text(order, items, "Ваш заказ принят!")
@@ -393,6 +412,17 @@ async def _send_tg_by_phone(phone: str, text: str) -> None:
 
 
 # ─── Шаблоны текстов ──────────────────────────────────────────────────────────
+
+def _order_confirm_sms(order: Order) -> str:
+    """Короткое SMS клиенту, что заказ оформлен. Уложено в один сегмент (кириллица ≤70)
+    ради стоимости: только номер, сумма и время доставки, без списка позиций."""
+    num = order.order_number or order.id
+    d = order.delivery_date.strftime("%d.%m") if order.delivery_date else ""
+    s = order.slot_start.strftime("%H:%M") if order.slot_start else ""
+    e = order.slot_end.strftime("%H:%M") if order.slot_end else ""
+    when = f" Доставка {d}, {s}-{e}".rstrip("-").rstrip() if d else ""
+    return f"Заказ {num} оформлен. {order.total_amount} р.{when}"
+
 
 def _order_sms_text(order: Order, items: list[OrderItem], title: str) -> str:
     lines = [title, f"Заказ {order.order_number or order.id}"]
