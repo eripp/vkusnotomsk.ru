@@ -577,15 +577,30 @@ const checkout = {
         }
         sel.innerHTML = html;
       }
-      // выбор слота дописывается в строку «Доставка: …» в панели заказа
+      // при выборе слота: синхронизируем поле даты с датой слота (может быть
+      // завтрашний, «зацепленный» к сегодня) и обновляем строку «Доставка: …».
       if (!sel.dataset.whenBound) {
-        sel.addEventListener('change', () => this._updateDateNotice());
+        sel.addEventListener('change', () => {
+          this._syncDateToSlot();
+          this._updateDateNotice();
+        });
         sel.dataset.whenBound = '1';
       }
     } catch {
       sel.innerHTML = '<option value="">Нет доступных слотов</option>';
       document.getElementById('schedule-error').style.display = '';
     }
+  },
+
+  // Ставит в поле даты дату выбранного слота (напр. завтрашнего, зацепленного
+  // к сегодня). Значение выставляем напрямую — событие change НЕ триггерится,
+  // поэтому список слотов не перестраивается и выбор не теряется.
+  _syncDateToSlot() {
+    const sel = document.getElementById('f-slot');
+    const opt = sel?.options[sel.selectedIndex];
+    const d = opt && opt.value ? opt.dataset?.date : null;
+    const inp = document.getElementById('f-date');
+    if (d && inp && inp.value !== d) inp.value = d;
   },
 
   // ближайший доступный день ПОСЛЕ указанной даты (для «зацепа» завтрашних слотов)
