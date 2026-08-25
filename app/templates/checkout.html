@@ -467,7 +467,12 @@ const checkout = {
   // уже прошли). Явно проговариваем день, чтобы покупатель не ждал доставку сегодня.
   _updateDateNotice() {
     const box = document.getElementById('date-notice');
-    const val = document.getElementById('f-date')?.value;
+    // фактический день доставки = дата выбранного слота (может быть «завтра»,
+    // зацепленное к сегодня), иначе — значение поля даты
+    const slotEl = document.getElementById('f-slot');
+    const slotOpt = slotEl?.options[slotEl.selectedIndex];
+    const val = (slotOpt && slotOpt.value ? slotOpt.dataset?.date : null)
+                || document.getElementById('f-date')?.value;
     if (!box) return;
     if (!val || !this.todayTomsk) { box.style.display = 'none'; return; }
 
@@ -538,19 +543,39 @@ const checkout = {
   async _loadSlots() {
     const dateVal = document.getElementById('f-date')?.value;
     if (!dateVal) return;
+    const sel = document.getElementById('f-slot');
+    if (!sel) return;
     try {
-      const res = await fetch(`/api/schedule/slots?date=${dateVal}`);
-      const data = await res.json();
-      this.slots = data.slots || [];
-      const sel = document.getElementById('f-slot');
-      if (!sel) return;
-      if (!this.slots.length) {
+      // Слоты выбранной даты. Если выбран сегодняшний день — «зацепляем» и завтра:
+      // сегодняшних слотов к вечеру мало, показываем ближайшие слоты обоих дней.
+      const dayList = [dateVal];
+      if (dateVal === this.todayTomsk) {
+        const nxt = this._nextAvailableAfter(dateVal);
+        if (nxt) dayList.push(nxt);
+      }
+      const results = await Promise.all(
+        dayList.map(d => fetch(`/api/schedule/slots?date=${d}`)
+          .then(r => r.json()).then(j => ({ date: d, slots: j.slots || [] })))
+      );
+
+      // все слоты (для валидации/подписи) + разметка select с группировкой по дням
+      this.slots = results.flatMap(r => r.slots.map(s => ({ ...s, date: r.date })));
+      const groupsWithSlots = results.filter(r => r.slots.length);
+
+      if (!groupsWithSlots.length) {
         sel.innerHTML = '<option value="">Нет доступных слотов</option>';
         document.getElementById('schedule-error').style.display = '';
       } else {
         document.getElementById('schedule-error').style.display = 'none';
-        sel.innerHTML = '<option value="">— выберите —</option>' +
-          this.slots.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+        let html = '<option value="">— выберите —</option>';
+        const multiDay = groupsWithSlots.length > 1;
+        for (const g of groupsWithSlots) {
+          const opts = g.slots.map(s =>
+            `<option value="${s.id}" data-date="${g.date}">${s.label}</option>`).join('');
+          // при нескольких днях подписываем группу, иначе — плоский список
+          html += multiDay ? `<optgroup label="${this._dayLabel(g.date)}">${opts}</optgroup>` : opts;
+        }
+        sel.innerHTML = html;
       }
       // выбор слота дописывается в строку «Доставка: …» в панели заказа
       if (!sel.dataset.whenBound) {
@@ -558,10 +583,32 @@ const checkout = {
         sel.dataset.whenBound = '1';
       }
     } catch {
-      const sel = document.getElementById('f-slot');
-      if (sel) sel.innerHTML = '<option value="">Нет доступных слотов</option>';
+      sel.innerHTML = '<option value="">Нет доступных слотов</option>';
       document.getElementById('schedule-error').style.display = '';
     }
+  },
+
+  // ближайший доступный день ПОСЛЕ указанной даты (для «зацепа» завтрашних слотов)
+  _nextAvailableAfter(dateVal) {
+    const i = this.availableDays.indexOf(dateVal);
+    if (i >= 0 && i + 1 < this.availableDays.length) return this.availableDays[i + 1];
+    return this.availableDays.find(d => d > dateVal) || null;
+  },
+
+  // «Сегодня, 25 авг» / «Завтра, 26 авг» / «Ср, 27 авг» — подпись группы слотов
+  _dayLabel(val) {
+    const MONTHS = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+    const WD = ['вс','пн','вт','ср','чт','пт','сб'];
+    const [y, m, d] = val.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    let prefix;
+    if (val === this.todayTomsk) prefix = 'Сегодня';
+    else {
+      const [ty, tm, td] = this.todayTomsk.split('-').map(Number);
+      const diff = Math.round((dt - new Date(ty, tm - 1, td)) / 86400000);
+      prefix = diff === 1 ? 'Завтра' : WD[dt.getDay()];
+    }
+    return `${prefix}, ${d} ${MONTHS[m - 1]}`;
   },
 
   _initPaymentToggle() {
@@ -642,11 +689,14 @@ const checkout = {
 
     const slotEl = document.getElementById('f-slot');
     const slotVal = slotEl?.value || '';
+    const slotOpt = slotEl?.options[slotEl.selectedIndex];
     // парсим время из label если значение — id демо-слота
     let slotStart = '10:00', slotEnd = '12:00';
-    const slotText = slotEl?.options[slotEl.selectedIndex]?.text || '';
+    const slotText = slotOpt?.text || '';
     const m = slotText.match(/(\d{2}:\d{2})\s*[–-]\s*(\d{2}:\d{2})/);
     if (m) { slotStart = m[1]; slotEnd = m[2]; }
+    // дата берётся у самого слота (слот может быть на завтра, «зацепленный» к сегодня)
+    const slotDate = slotOpt?.dataset?.date || document.getElementById('f-date').value;
 
     const _name  = document.getElementById('f-name').value.trim();
     const _phone = document.getElementById('f-phone').value.trim();
@@ -662,7 +712,7 @@ const checkout = {
       lat:             deliveryMap._lat,
       lon:             deliveryMap._lon,
       delivery_mode:   this.mode,
-      delivery_date:   document.getElementById('f-date').value,
+      delivery_date:   slotDate,
       slot_start:      slotStart,
       slot_end:        slotEnd,
       schedule_entry_id: isNaN(parseInt(slotVal)) ? null : parseInt(slotVal),
