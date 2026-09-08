@@ -1118,12 +1118,13 @@ img { display: block; max-width: 100%; }
 .co-promo-apply:hover { background: #e8e6df; }
 
 /* ─── Баннер на главной ───────────────────────────────────────────────────── */
-/* Пропорция баннера ~1.75:1 — на всю ширину контента он был бы слишком высоким
-   (≈650px) и вытеснял бы каталог за экран, поэтому ограничиваем ширину. */
 .home-banner {
-  display: block; margin: 0 auto 24px; max-width: 760px;
-  border-radius: 14px; overflow: hidden;
-  line-height: 0;   /* убирает лишний зазор под inline-картинкой */
+  display: block;
+  margin: 0 auto 24px;
+  max-width: 80%;
+  border-radius: 6px;
+  overflow: hidden;
+  line-height: 0;
 }
 .home-banner img { width: 100%; height: auto; display: block; }
 
