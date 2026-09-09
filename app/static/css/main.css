@@ -1326,15 +1326,19 @@ svg.leaflet-attribution-flag { display: none !important; }
 .cookie-banner[hidden] { display: none; }
 .cookie-text { flex: 1; }
 .cookie-text a { color: var(--brand); text-decoration: underline; }
-.cookie-accept {
-  flex-shrink: 0; background: var(--brand); color: #fff; border: none;
-  padding: 10px 22px; border-radius: 10px; font-size: 14px; font-weight: 700;
-  cursor: pointer; white-space: nowrap;
+.cookie-actions { flex-shrink: 0; display: flex; gap: 8px; align-items: center; }
+.cookie-accept, .cookie-reject {
+  border: none; padding: 10px 22px; border-radius: 10px;
+  font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap;
 }
+.cookie-accept { background: var(--brand); color: #fff; }
 .cookie-accept:hover { background: var(--brand-hover); }
+.cookie-reject { background: transparent; color: #cfcfcc; border: 1px solid #55554f; }
+.cookie-reject:hover { background: #ffffff14; color: #fff; }
 @media (max-width: 600px) {
   .cookie-banner { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px; }
-  .cookie-accept { width: 100%; }
+  .cookie-actions { flex-direction: column-reverse; }
+  .cookie-accept, .cookie-reject { width: 100%; }
 }
 
 /* ─── Страница 404 ───────────────────────────────────────────────────────── */

@@ -441,20 +441,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 {% set _mid = request.state.site_settings.get('metrika_id', '') %}
 {% if _mid %}
-<!-- Яндекс.Метрика -->
+<!-- Яндекс.Метрика — загружается только если пользователь не отклонил cookie -->
 <script type="text/javascript">
-window.dataLayer = window.dataLayer || [];
-(function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
-m[i].l=1*new Date();for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r){return;}}
-k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
-(window,document,"script","https://mc.yandex.ru/metrika/tag.js","ym");
-ym({{ _mid }}, "init", {
-  clickmap: true,
-  trackLinks: true,
-  accurateTrackBounce: true,
-  webvisor: {{ 'true' if request.state.site_settings.get('metrika_webvisor') == '1' else 'false' }},
-  ecommerce: {{ ('"dataLayer"' if request.state.site_settings.get('metrika_ecom') == '1' else 'false') | safe }}
-});
+(function(){
+  // если посетитель отклонил обработку cookie — аналитику не подключаем
+  try { if (localStorage.getItem('vkusno_cookie_consent') === 'rejected') return; } catch (e) {}
+  window.dataLayer = window.dataLayer || [];
+  (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+  m[i].l=1*new Date();for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r){return;}}
+  k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+  (window,document,"script","https://mc.yandex.ru/metrika/tag.js","ym");
+  ym({{ _mid }}, "init", {
+    clickmap: true,
+    trackLinks: true,
+    accurateTrackBounce: true,
+    webvisor: {{ 'true' if request.state.site_settings.get('metrika_webvisor') == '1' else 'false' }},
+    ecommerce: {{ ('"dataLayer"' if request.state.site_settings.get('metrika_ecom') == '1' else 'false') | safe }}
+  });
+})();
 </script>
 <noscript><div><img src="https://mc.yandex.ru/watch/{{ _mid }}" style="position:absolute; left:-9999px;" alt=""></div></noscript>
 {% endif %}
@@ -471,7 +475,10 @@ ym({{ _mid }}, "init", {
     <a href="/privacy" target="_blank">Политикой конфиденциальности</a> и обработкой
     персональных данных.
   </div>
-  <button class="cookie-accept" onclick="cookieConsent.accept()">Принять</button>
+  <div class="cookie-actions">
+    <button class="cookie-reject" onclick="cookieConsent.reject()">Отклонить</button>
+    <button class="cookie-accept" onclick="cookieConsent.accept()">Принять</button>
+  </div>
 </div>
 <script>
   const cookieConsent = {
@@ -481,10 +488,20 @@ ym({{ _mid }}, "init", {
       const b = document.getElementById('cookie-banner');
       if (b) b.hidden = false;
     },
-    accept() {
-      try { localStorage.setItem(this._key, new Date().toISOString()); } catch {}
+    _hide() {
       const b = document.getElementById('cookie-banner');
       if (b) b.hidden = true;
+    },
+    accept() {
+      try { localStorage.setItem(this._key, new Date().toISOString()); } catch {}
+      this._hide();
+    },
+    reject() {
+      // фиксируем отказ и перезагружаем страницу — Метрика при следующем
+      // рендере не подключится (см. гейт в блоке аналитики)
+      try { localStorage.setItem(this._key, 'rejected'); } catch {}
+      this._hide();
+      location.reload();
     },
   };
   cookieConsent.init();
