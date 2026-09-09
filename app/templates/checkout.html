@@ -53,6 +53,11 @@
           <label for="f-phone">Телефон</label>
           <input id="f-phone" type="tel" placeholder="+7 (999) 000-00-00" autocomplete="tel">
         </div>
+        <label class="co-consent">
+          <input id="f-consent" type="checkbox">
+          <span>Подтверждаю согласие на обработку персональных данных
+            <a target="_blank" href="/privacy">(Политика конфиденциальности)</a></span>
+        </label>
       </div>
 
       <div class="co-section">
@@ -658,6 +663,7 @@ const checkout = {
     if (!document.getElementById('f-name')?.value.trim())  errs.push('Укажите имя');
     const phone = document.getElementById('f-phone')?.value.trim();
     if ((phone || '').replace(/\D/g, '').length < 11) errs.push('Укажите корректный номер телефона');
+    if (!document.getElementById('f-consent')?.checked) errs.push('Подтвердите согласие на обработку персональных данных');
     if (this.mode === 'delivery') {
       if (!document.getElementById('f-street')?.value.trim()) errs.push('Укажите улицу');
       if (!document.getElementById('f-house')?.value.trim())  errs.push('Укажите дом');

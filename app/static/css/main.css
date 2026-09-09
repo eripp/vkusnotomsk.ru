@@ -676,6 +676,13 @@ img { display: block; max-width: 100%; }
 /* плейсхолдеры светлее — чтобы не путались с введёнными данными */
 .co-field input::placeholder, .co-field textarea::placeholder { color: #c4c4c4; }
 
+/* согласие на обработку ПДн */
+.co-consent { display: flex; align-items: flex-start; gap: 8px; cursor: pointer;
+  font-size: 13px; color: #555; line-height: 1.4; margin-top: 4px; }
+.co-consent input { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px;
+  accent-color: var(--brand); cursor: pointer; }
+.co-consent a { color: var(--brand); text-decoration: underline; }
+
 .co-fields-row { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
 .co-fields-row > .co-field { min-width: 0; }
 /* ряд адреса: Дом / Квартира / Этаж / Подъезд — равные колонки */
