@@ -219,6 +219,10 @@ const checkout = {
     this._initAddressAutocomplete();
     this._prefillUser();
     this._loadCashbackBalance();
+    // снимаем подсветку согласия, как только его отметили
+    document.getElementById('f-consent')?.addEventListener('change', e => {
+      if (e.target.checked) e.target.closest('.co-consent')?.classList.remove('error');
+    });
   },
 
   // ─── Автодополнение адреса (Dadata) ──────────────────────────────────────
@@ -682,6 +686,9 @@ const checkout = {
     errEl.style.display = 'none';
 
     const errs = this._validate();
+    // подсветка блока согласия, если галочка не стоит
+    const consent = document.getElementById('f-consent');
+    consent?.closest('.co-consent')?.classList.toggle('error', !consent.checked);
     if (errs.length) {
       errEl.textContent = errs[0];
       errEl.style.display = '';

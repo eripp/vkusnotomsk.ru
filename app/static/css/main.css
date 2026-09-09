@@ -677,11 +677,16 @@ img { display: block; max-width: 100%; }
 .co-field input::placeholder, .co-field textarea::placeholder { color: #c4c4c4; }
 
 /* согласие на обработку ПДн */
-.co-consent { display: flex; align-items: flex-start; gap: 8px; cursor: pointer;
-  font-size: 13px; color: #555; line-height: 1.4; margin-top: 4px; }
+.co-consent { display: flex; align-items: flex-start; gap: 12px; cursor: pointer;
+  font-size: 13px; color: #555; line-height: 1.4; margin-top: 4px;
+  padding: 8px 10px; border: 1px solid transparent; border-radius: 8px;
+  transition: background .15s, border-color .15s; }
 .co-consent input { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px;
   accent-color: var(--brand); cursor: pointer; }
 .co-consent a { color: var(--brand); text-decoration: underline; }
+/* подсветка, если при оформлении согласие не отмечено */
+.co-consent.error { background: #fff0f0; border-color: #e05353; }
+.co-consent.error input { accent-color: #e05353; outline: 2px solid #e05353; outline-offset: 1px; }
 
 .co-fields-row { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
 .co-fields-row > .co-field { min-width: 0; }
