@@ -38,6 +38,23 @@ async def payment_status(ref: str, db: AsyncSession = Depends(get_db)):
             raise HTTPException(status_code=404)
         if pending.order_id:
             return {"paid": True, "order_id": pending.order_id}
+        # Подстраховка на случай, если webhook от YooKassa не пришёл: пока клиент
+        # на странице ожидания, сами спрашиваем статус платежа и материализуем заказ.
+        if pending.yookassa_payment_id:
+            try:
+                from app.services.yookassa import get_payment
+                pay = await get_payment(pending.yookassa_payment_id)
+                if pay and pay.get("status") == "succeeded":
+                    await _handle_payment_succeeded(db, {
+                        "id": pending.yookassa_payment_id,
+                        "metadata": {"order_id": str(pending.id)},
+                    })
+                    await db.refresh(pending)
+                    if pending.order_id:
+                        return {"paid": True, "order_id": pending.order_id}
+            except Exception as exc:
+                logger.warning("[YooKassa] подстраховочная проверка платежа %s не удалась: %s",
+                               pending.yookassa_payment_id, exc)
         return {"paid": False, "order_id": None}
     # готовый заказ (cash/terminal)
     order = (await db.execute(select(Order).where(Order.id == int(ref)))).scalar_one_or_none() if ref.isdigit() else None

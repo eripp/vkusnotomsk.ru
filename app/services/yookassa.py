@@ -82,6 +82,22 @@ async def create_payment(
     return {"payment_id": payment_id, "confirmation_url": confirmation_url}
 
 
+async def get_payment(payment_id: str) -> dict | None:
+    """Запрашивает актуальный статус платежа у YooKassa (GET /payments/{id}).
+    Используется как подстраховка, если webhook не пришёл. None — при ошибке."""
+    shop_id, secret = await _credentials()
+    if not shop_id or not secret:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(f"{YOOKASSA_API}/payments/{payment_id}", auth=(shop_id, secret))
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as exc:
+        logger.warning("[YooKassa] не удалось получить платёж %s: %s", payment_id, exc)
+        return None
+
+
 async def refund_payment(payment_id: str, amount: int) -> dict:
     shop_id, secret = await _credentials()
     if not shop_id or not secret:
