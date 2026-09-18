@@ -219,6 +219,7 @@ const checkout = {
     this._initAddressAutocomplete();
     this._prefillUser();
     this._loadCashbackBalance();
+    this._bindDraftAutosave();
     // снимаем подсветку согласия, как только его отметили
     document.getElementById('f-consent')?.addEventListener('change', e => {
       if (e.target.checked) e.target.closest('.co-consent')?.classList.remove('error');
@@ -271,6 +272,7 @@ const checkout = {
     if (s.lat != null && s.lon != null) {
       deliveryMap.setPoint(s.lat, s.lon);   // маркер + определение зоны
     }
+    this._saveDraft();   // адрес выбран — фиксируем черновик (в т.ч. координаты)
   },
 
   async _loadCashbackBalance() {
@@ -345,6 +347,62 @@ const checkout = {
     if (ph && u.phone) ph.value = u.phone;
     const nm = document.getElementById('f-name');
     if (nm && u.name) nm.value = u.name;
+  },
+
+  // ─── Черновик оформления (localStorage) ─────────────────────────────────────
+  // Сохраняем введённые данные, чтобы не терялись при обновлении/уходе со страницы.
+  // Имя/телефон тянутся из профиля отдельно; дату/слот/промокод/согласие НЕ храним
+  // (время-зависимы или требуют повторного подтверждения).
+  _DRAFT_KEY: 'vkusno_checkout_draft',
+  _DRAFT_FIELDS: ['f-street', 'f-house', 'f-apt', 'f-floor', 'f-entrance', 'f-comment', 'f-persons'],
+
+  _saveDraft() {
+    try {
+      const d = {};
+      this._DRAFT_FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.value) d[id] = el.value;
+      });
+      // координаты и зона — чтобы восстановленный адрес был готов к оформлению
+      if (deliveryMap._lat != null && deliveryMap._lon != null) {
+        d.lat = deliveryMap._lat; d.lon = deliveryMap._lon;
+      }
+      localStorage.setItem(this._DRAFT_KEY, JSON.stringify(d));
+    } catch {}
+  },
+
+  _bindDraftAutosave() {
+    // пишем сразу при изменении любого сохраняемого поля
+    this._DRAFT_FIELDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => this._saveDraft());
+    });
+  },
+
+  _restoreDraft() {
+    let d;
+    try { d = JSON.parse(localStorage.getItem(this._DRAFT_KEY) || 'null'); } catch { d = null; }
+    if (!d) return;
+    // не-адресные поля проставляем напрямую
+    ['f-apt', 'f-floor', 'f-entrance', 'f-comment', 'f-persons'].forEach(id => {
+      if (d[id]) { const el = document.getElementById(id); if (el) el.value = d[id]; }
+    });
+    // адрес: если есть координаты — восстанавливаем через _applySuggestion,
+    // чтобы поставить маркер и пере-определить зону (иначе оформить нельзя)
+    if (d['f-street'] && d.lat != null && d.lon != null) {
+      this._applySuggestion({
+        street: d['f-street'], house: d['f-house'],
+        lat: d.lat, lon: d.lon,
+      });
+    } else {
+      if (d['f-street']) { const s = document.getElementById('f-street'); if (s) s.value = d['f-street']; }
+      if (d['f-house'])  { const h = document.getElementById('f-house');  if (h) h.value = d['f-house']; }
+    }
+  },
+
+  // вызывается после успешного оформления — черновик больше не нужен
+  _clearDraft() {
+    try { localStorage.removeItem(this._DRAFT_KEY); } catch {}
   },
 
   _renderSummary() {
@@ -768,6 +826,8 @@ const checkout = {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Ошибка сервера');
 
+      this._clearDraft();   // заказ оформлен — черновик адреса больше не нужен
+
       if (data.payment_url) {
         // онлайн-оплата — редирект на YooKassa. Корзину НЕ чистим: заказ
         // создастся только после оплаты (очистим на странице успеха).
@@ -912,6 +972,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch { /* не авторизован — оформляем как гость */ }
   checkout.init();
   deliveryMap.init();
+  // восстановление адреса требует готовой карты (маркер + зона) — после init карты
+  checkout._restoreDraft();
 });
 
 // При возврате «назад» из YooKassa страница берётся из bfcache и кнопка
