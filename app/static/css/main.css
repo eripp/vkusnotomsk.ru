@@ -1129,7 +1129,7 @@ img { display: block; max-width: 100%; }
 }
 .co-promo-apply:hover { background: #e8e6df; }
 
-/* ─── Баннер на главной ───────────────────────────────────────────────────── */
+/* ─── Баннер-слайдер на главной ───────────────────────────────────────────── */
 .home-banner {
   display: block;
   margin: 0 auto 24px;
@@ -1137,8 +1137,32 @@ img { display: block; max-width: 100%; }
   border-radius: 6px;
   overflow: hidden;
   line-height: 0;
+  position: relative;
 }
-.home-banner img { width: 100%; height: auto; display: block; }
+/* дорожка слайдов: изображения наложены друг на друга, плавно проявляются */
+.hb-slides { position: relative; width: 100%; }
+.hb-slide {
+  width: 100%; height: auto; display: block;
+  opacity: 0; transition: opacity .6s ease;
+}
+.hb-slide:first-child { position: relative; }           /* задаёт высоту контейнера */
+.hb-slide:not(:first-child) { position: absolute; inset: 0; }
+.hb-slide.is-active { opacity: 1; }
+/* одиночный слайд (fallback без JS) — показываем первый */
+.hb-slide:only-child { opacity: 1; }
+
+/* точки-навигация */
+.hb-dots {
+  position: absolute; left: 0; right: 0; bottom: 10px;
+  display: flex; justify-content: center; gap: 8px; line-height: 0; z-index: 2;
+}
+.hb-dot {
+  width: 9px; height: 9px; padding: 0; border-radius: 50%;
+  border: none; cursor: pointer; background: rgba(255,255,255,.55);
+  box-shadow: 0 1px 3px rgba(0,0,0,.35); transition: background .2s, transform .2s;
+}
+.hb-dot.is-active { background: #fff; transform: scale(1.25); }
+@media (max-width: 600px) { .hb-dots { bottom: 6px; } .hb-dot { width: 7px; height: 7px; } }
 
 /* ─── Stories ─────────────────────────────────────────────────────────────── */
 .stories-row {
