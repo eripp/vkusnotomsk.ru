@@ -105,10 +105,10 @@
     <!-- ═══ БАННЕР-СЛАЙДЕР ═══════════════════════════════════════════════ -->
     <div class="home-banner" id="home-banner">
       <div class="hb-slides">
-        <img class="hb-slide is-active" src="/static/img/banner_about_delivery_intervals.png"
-             alt="Информация об интервалах доставки" loading="eager">
-        <img class="hb-slide" src="/static/img/banner_about_new-items.png"
+        <img class="hb-slide is-active" src="/static/img/banner_about_new-items.png"
              alt="Новинки" loading="eager">
+        <img class="hb-slide" src="/static/img/banner_about_delivery_intervals.png"
+             alt="Информация об интервалах доставки" loading="eager">
       </div>
       <div class="hb-dots" role="tablist" aria-label="Баннеры"></div>
     </div>
@@ -119,7 +119,7 @@
       const slides = Array.from(root.querySelectorAll('.hb-slide'));
       if (slides.length < 2) return;   // один слайд — переключать нечего
       const dotsBox = root.querySelector('.hb-dots');
-      const INTERVAL = 5000;
+      const INTERVAL = 10000;
       let cur = 0, timer = null;
 
       const dots = slides.map((_, i) => {
