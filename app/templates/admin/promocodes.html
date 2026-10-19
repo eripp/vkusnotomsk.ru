@@ -63,9 +63,51 @@ function openModal(data) {
   document.getElementById('pm-from').value = data ? (data.valid_from ? data.valid_from.slice(0,10) : '') : '';
   document.getElementById('pm-until').value = data ? (data.valid_until ? data.valid_until.slice(0,10) : '') : '';
   document.getElementById('pm-active').checked = data ? data.is_active : true;
+  // реферальные поля
+  document.getElementById('pm-owner-id').value = data ? (data.owner_user_id || '') : '';
+  document.getElementById('pm-owner-pct').value = data ? (data.cashback_owner_pct || '') : '';
+  document.getElementById('pm-owner-search').value = '';
+  document.getElementById('pm-owner-current').textContent =
+    (data && data.owner_label) ? 'Выбран: ' + data.owner_label : '';
+  document.getElementById('pm-owner-results').style.display = 'none';
+  syncType();
 }
 function closeModal() { document.getElementById('promo-modal').style.display = 'none'; }
 function editPromo(data) { openModal(data); }
+
+// Показываем реферальный блок только для type=referral
+function syncType() {
+  const isRef = document.getElementById('pm-type').value === 'referral';
+  document.getElementById('pm-referral-block').style.display = isRef ? '' : 'none';
+}
+document.getElementById('pm-type').addEventListener('change', syncType);
+
+// Поиск блогера по телефону/имени с автоподстановкой
+let ownerSearchTimer = null;
+document.getElementById('pm-owner-search').addEventListener('input', function () {
+  clearTimeout(ownerSearchTimer);
+  const q = this.value.trim();
+  const box = document.getElementById('pm-owner-results');
+  if (!q) { box.style.display = 'none'; return; }
+  ownerSearchTimer = setTimeout(async () => {
+    try {
+      const res = await fetch('/admin/users/search?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      if (!data.users.length) { box.innerHTML = '<div style="padding:8px;color:#999">Не найдено</div>'; box.style.display=''; return; }
+      box.innerHTML = data.users.map(u =>
+        `<div class="pm-owner-opt" data-id="${u.id}" data-label="${(u.name||'—')} (${u.phone})"
+              style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0">
+           #${u.id} · ${u.name || '—'} · ${u.phone}</div>`).join('');
+      box.style.display = '';
+      box.querySelectorAll('.pm-owner-opt').forEach(el => el.addEventListener('click', () => {
+        document.getElementById('pm-owner-id').value = el.dataset.id;
+        document.getElementById('pm-owner-current').textContent = 'Выбран: ' + el.dataset.label;
+        document.getElementById('pm-owner-search').value = '';
+        box.style.display = 'none';
+      }));
+    } catch { box.style.display = 'none'; }
+  }, 300);
+});
 
 async function savePromo() {
   const id = document.getElementById('pm-id').value;
@@ -74,6 +116,8 @@ async function savePromo() {
     type:               document.getElementById('pm-type').value,
     discount_percent:   parseInt(document.getElementById('pm-discount').value) || null,
     cashback_buyer_pct: parseInt(document.getElementById('pm-cashback').value) || null,
+    cashback_owner_pct: parseInt(document.getElementById('pm-owner-pct').value) || null,
+    owner_user_id:      parseInt(document.getElementById('pm-owner-id').value) || null,
     min_order_amount:   parseInt(document.getElementById('pm-min').value) || null,
     usage_limit:        parseInt(document.getElementById('pm-limit').value) || null,
     valid_from:         document.getElementById('pm-from').value || null,
@@ -109,6 +153,22 @@ async function savePromo() {
       <div class="adm-field-row">
         <div class="adm-field"><label>Кешбэк покупателю %</label><input id="pm-cashback" type="number" min="1" max="100"></div>
         <div class="adm-field"><label>Мин. сумма ₽</label><input id="pm-min" type="number" min="0"></div>
+      </div>
+
+      <!-- Реферальный блок: блогер-владелец + его кешбэк -->
+      <div id="pm-referral-block" style="display:none;border:1px dashed #d8b36a;border-radius:8px;padding:12px;margin-bottom:4px;background:#fffdf5">
+        <div style="font-size:12px;color:#8a6d1f;margin-bottom:8px">
+          Реферальный код: покупателю задайте <b>скидку</b> ИЛИ <b>кешбэк покупателю</b> (что-то одно),
+          а блогеру ниже — его кешбэк.
+        </div>
+        <div class="adm-field" style="position:relative">
+          <label>Блогер (владелец кода) *</label>
+          <input id="pm-owner-search" placeholder="Телефон или имя…" autocomplete="off">
+          <input type="hidden" id="pm-owner-id">
+          <div id="pm-owner-current" style="font-size:12px;color:#1a7a1a;margin-top:4px"></div>
+          <div id="pm-owner-results" style="position:absolute;z-index:10;left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:6px;margin-top:2px;max-height:180px;overflow:auto;display:none"></div>
+        </div>
+        <div class="adm-field"><label>Кешбэк блогеру % *</label><input id="pm-owner-pct" type="number" min="1" max="100"></div>
       </div>
       <div class="adm-field-row">
         <div class="adm-field"><label>Лимит использований</label><input id="pm-limit" type="number" min="1" placeholder="∞"></div>

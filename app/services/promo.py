@@ -48,7 +48,9 @@ async def validate_promocode(
         }
 
     discount = 0
-    if promo.type == PromoType.discount and promo.discount_percent:
+    # скидка: у обычного discount-кода, а также у реферального, если блогер
+    # настроил покупателю именно скидку (discount_percent заполнен)
+    if promo.type in (PromoType.discount, PromoType.referral) and promo.discount_percent:
         discount = subtotal * promo.discount_percent // 100
 
     return {
@@ -66,6 +68,8 @@ def _promo_label(promo: Promocode, discount: int) -> str:
         pct = promo.cashback_buyer_pct or 0
         return f"Кешбэк {pct}% на этот заказ"
     if promo.type == PromoType.referral:
+        if promo.discount_percent:
+            return f"Реферальный код — скидка {promo.discount_percent}% — −{discount} ₽"
         pct = promo.cashback_buyer_pct or 0
         return f"Реферальный код — кешбэк {pct}%"
     return "Промокод применён"
@@ -87,34 +91,51 @@ async def earn_cashback(
     order: Order,
     promo: Promocode | None,
 ) -> int:
-    """Начисляем кешбэк за заказ. Возвращает начисленную сумму."""
-    # процент кешбэка: из промокода или из настроек сайта
-    pct = 0
+    """Начисляем кешбэк за заказ. Возвращает кешбэк ПОКУПАТЕЛЯ.
+
+    Правила:
+      • cashback/referral-промокод с cashback_buyer_pct → покупателю этот %.
+        (у referral покупатель может вместо кешбэка получить скидку — тогда
+         cashback_buyer_pct пустой и покупателю кешбэк не начисляется);
+      • нет промокода (или discount) → покупателю % из настройки cashback_max_pct;
+      • referral-промокод → дополнительно блогеру-владельцу cashback_owner_pct
+        от той же базы (отдельной транзакцией).
+    """
+    # база: сумма после скидки, без доставки
+    base = order.total_amount - order.delivery_price - order.discount_amount
+    if base <= 0:
+        return 0
+
+    # ── процент покупателю ──
+    buyer_pct = 0
     if promo and promo.type in (PromoType.cashback, PromoType.referral):
-        pct = promo.cashback_buyer_pct or 0
-    else:
-        # берём из site_settings
-        cfg_res = await db.execute(
+        buyer_pct = promo.cashback_buyer_pct or 0
+    elif not promo or promo.type == PromoType.discount:
+        cfg = (await db.execute(
             select(SiteSetting).where(SiteSetting.key == "cashback_max_pct")
-        )
-        cfg = cfg_res.scalar_one_or_none()
+        )).scalar_one_or_none()
         if cfg:
             try:
-                pct = int(cfg.value)
+                buyer_pct = int(cfg.value)
             except (ValueError, TypeError):
-                pct = 0
+                buyer_pct = 0
 
-    if pct <= 0:
-        return 0
+    earned = max(0, base * buyer_pct // 100) if buyer_pct > 0 else 0
+    if earned:
+        await _apply_cashback_delta(db, user_id, earned, CashbackTxType.earn, order_id=order.id,
+                                    comment=f"Кешбэк {buyer_pct}% за заказ #{order.id}")
 
-    # кешбэк начисляется с суммы после скидки, не с доставки
-    base = order.total_amount - order.delivery_price - order.discount_amount
-    earned = max(0, base * pct // 100)
-    if earned == 0:
-        return 0
+    # ── кешбэк блогеру-владельцу реферального кода ──
+    if (promo and promo.type == PromoType.referral
+            and promo.owner_user_id and (promo.cashback_owner_pct or 0) > 0
+            and promo.owner_user_id != user_id):          # не платим самому себе
+        owner_pct = promo.cashback_owner_pct
+        owner_earned = max(0, base * owner_pct // 100)
+        if owner_earned:
+            await _apply_cashback_delta(
+                db, promo.owner_user_id, owner_earned, CashbackTxType.earn, order_id=order.id,
+                comment=f"Реферальный кешбэк {owner_pct}% (код {promo.code}, заказ #{order.id})")
 
-    await _apply_cashback_delta(db, user_id, earned, CashbackTxType.earn, order_id=order.id,
-                                comment=f"Кешбэк {pct}% за заказ #{order.id}")
     return earned
 
 

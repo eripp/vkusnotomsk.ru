@@ -391,22 +391,30 @@ async def admin_order_set_status(
     await db.commit()
 
     # Кешбэк — при переходе в «Выполнен», для любого способа оплаты.
-    # Идемпотентно: начисляем один раз (пока cashback_earned == 0).
-    if new_status == OrderStatus.done and order.user_id and not order.cashback_earned:
+    # Идемпотентно: начисляем один раз. Нельзя опираться на cashback_earned (у
+    # реферала покупатель может получить скидку → его кешбэк 0, но блогеру платим),
+    # поэтому проверяем, не было ли уже начислений по этому заказу.
+    if new_status == OrderStatus.done and order.user_id:
         from app.services.promo import earn_cashback
-        from app.models import Promocode
-        try:
-            promo = None
-            if order.promocode_id:
-                promo = (await db.execute(
-                    select(Promocode).where(Promocode.id == order.promocode_id)
-                )).scalar_one_or_none()
-            earned = await earn_cashback(db, order.user_id, order, promo)
-            if earned:
-                order.cashback_earned = earned
-                await db.commit()
-        except Exception as exc:
-            logger.warning("[cashback] начисление при завершении заказа #%s: %s", order_id, exc)
+        from app.models import Promocode, CashbackTransaction, CashbackTxType
+        already = (await db.execute(
+            select(CashbackTransaction.id).where(
+                CashbackTransaction.order_id == order.id,
+                CashbackTransaction.type == CashbackTxType.earn,
+            ).limit(1)
+        )).scalar_one_or_none()
+        if not already:
+            try:
+                promo = None
+                if order.promocode_id:
+                    promo = (await db.execute(
+                        select(Promocode).where(Promocode.id == order.promocode_id)
+                    )).scalar_one_or_none()
+                earned = await earn_cashback(db, order.user_id, order, promo)
+                order.cashback_earned = earned      # кешбэк именно покупателя (может быть 0)
+                await db.commit()                   # коммитим всегда: блогеру могли начислить при earned==0
+            except Exception as exc:
+                logger.warning("[cashback] начисление при завершении заказа #%s: %s", order_id, exc)
 
     try:
         await notify_order_status(db, order)
@@ -541,6 +549,20 @@ async def admin_product_search(q: str = "", db: AsyncSession = Depends(get_db)):
         stmt = stmt.where(Product.name.ilike(f"%{q.strip()}%"))
     rows = (await db.execute(stmt.order_by(Product.name).limit(20))).scalars().all()
     return {"products": [{"id": p.id, "name": p.name, "price": p.price} for p in rows]}
+
+
+@router.get("/users/search")
+async def admin_user_search(q: str = "", db: AsyncSession = Depends(get_db)):
+    """Поиск пользователя по имени/телефону (напр. для выбора блогера-владельца промокода)."""
+    stmt = select(User)
+    qs = q.strip()
+    if qs:
+        if qs.isdigit() and len(qs) < 7:          # короткое число — считаем это id
+            stmt = stmt.where(or_(User.id == int(qs), User.phone.ilike(f"%{qs}%")))
+        else:
+            stmt = stmt.where(or_(User.phone.ilike(f"%{qs}%"), User.name.ilike(f"%{qs}%")))
+    rows = (await db.execute(stmt.order_by(User.id).limit(15))).scalars().all()
+    return {"users": [{"id": u.id, "name": u.name or "", "phone": u.phone} for u in rows]}
 
 
 # ─── SEO ──────────────────────────────────────────────────────────────────────
@@ -1184,12 +1206,17 @@ async def admin_user_cashback(
 
 @router.get("/promocodes", response_class=HTMLResponse)
 async def admin_promocodes(request: Request, db: AsyncSession = Depends(get_db)):
-    promos = (await db.execute(select(Promocode).order_by(desc(Promocode.id)))).scalars().all()
+    promos = (await db.execute(
+        select(Promocode).options(selectinload(Promocode.owner)).order_by(desc(Promocode.id))
+    )).scalars().all()
     promos_json = [
         {
             "id": p.id, "code": p.code, "type": p.type.value,
             "discount_percent": p.discount_percent,
             "cashback_buyer_pct": p.cashback_buyer_pct,
+            "cashback_owner_pct": p.cashback_owner_pct,
+            "owner_user_id": p.owner_user_id,
+            "owner_label": (f"{p.owner.name or '—'} ({p.owner.phone})" if p.owner else ""),
             "min_order_amount": p.min_order_amount,
             "usage_limit": p.usage_limit, "usage_count": p.usage_count,
             "valid_from": p.valid_from.isoformat() if p.valid_from else None,
@@ -1209,6 +1236,8 @@ class PromoIn(BaseModel):
     type: str = "discount"
     discount_percent: Optional[int] = None
     cashback_buyer_pct: Optional[int] = None
+    cashback_owner_pct: Optional[int] = None
+    owner_user_id: Optional[int] = None
     min_order_amount: Optional[int] = None
     usage_limit: Optional[int] = None
     valid_from: Optional[str] = None
@@ -1216,13 +1245,38 @@ class PromoIn(BaseModel):
     is_active: bool = True
 
 
+async def _validate_promo_payload(payload: PromoIn, db: AsyncSession) -> None:
+    """Проверки целостности промокода (единые для create/update). HTTP 400 при ошибке."""
+    t = payload.type
+    if t == "referral":
+        # действие покупателю: либо скидка, либо кешбэк — не оба сразу
+        if payload.discount_percent and payload.cashback_buyer_pct:
+            raise HTTPException(status_code=400,
+                detail="Для реферального кода укажите покупателю что-то одно: скидку ИЛИ кешбэк")
+        if not payload.discount_percent and not payload.cashback_buyer_pct:
+            raise HTTPException(status_code=400,
+                detail="Укажите выгоду покупателю: скидку или кешбэк")
+        if not payload.owner_user_id:
+            raise HTTPException(status_code=400, detail="Выберите блогера (владельца кода)")
+        if not payload.cashback_owner_pct:
+            raise HTTPException(status_code=400, detail="Укажите процент кешбэка блогеру")
+        # владелец должен существовать
+        u = (await db.execute(select(User).where(User.id == payload.owner_user_id))).scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=400, detail="Указанный блогер не найден")
+
+
 @router.post("/promocodes")
 async def admin_promo_create(payload: PromoIn, db: AsyncSession = Depends(get_db)):
+    await _validate_promo_payload(payload, db)
+    is_ref = payload.type == "referral"
     p = Promocode(
         code=payload.code.upper().strip(),
         type=PromoType(payload.type),
         discount_percent=payload.discount_percent,
         cashback_buyer_pct=payload.cashback_buyer_pct,
+        cashback_owner_pct=payload.cashback_owner_pct if is_ref else None,
+        owner_user_id=payload.owner_user_id if is_ref else None,
         min_order_amount=payload.min_order_amount,
         usage_limit=payload.usage_limit,
         valid_from=datetime.fromisoformat(payload.valid_from) if payload.valid_from else datetime.utcnow(),
@@ -1236,14 +1290,18 @@ async def admin_promo_create(payload: PromoIn, db: AsyncSession = Depends(get_db
 
 @router.put("/promocodes/{promo_id}")
 async def admin_promo_update(promo_id: int, payload: PromoIn, db: AsyncSession = Depends(get_db)):
+    await _validate_promo_payload(payload, db)
     res = await db.execute(select(Promocode).where(Promocode.id == promo_id))
     p = res.scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404)
+    is_ref = payload.type == "referral"
     p.code               = payload.code.upper().strip()
     p.type               = PromoType(payload.type)
     p.discount_percent   = payload.discount_percent
     p.cashback_buyer_pct = payload.cashback_buyer_pct
+    p.cashback_owner_pct = payload.cashback_owner_pct if is_ref else None
+    p.owner_user_id      = payload.owner_user_id if is_ref else None
     p.min_order_amount   = payload.min_order_amount
     p.usage_limit        = payload.usage_limit
     p.valid_from         = datetime.fromisoformat(payload.valid_from) if payload.valid_from else p.valid_from
