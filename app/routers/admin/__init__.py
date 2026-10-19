@@ -2,6 +2,7 @@ import csv
 import io
 import logging
 import os
+import shutil
 import uuid
 from datetime import date, datetime, time, timedelta
 from typing import Optional
@@ -849,6 +850,69 @@ async def admin_product_create(
     await _save_images(db, p.id, images)
     await db.commit()
     return _r(f"/admin/products?msg=Товар+создан")
+
+
+async def _unique_slug(db: AsyncSession, base: str) -> str:
+    """Возвращает slug, которого ещё нет в products: base, base-copy, base-copy-2, …"""
+    candidate = base
+    suffix = 0
+    while (await db.execute(
+        select(Product.id).where(Product.slug == candidate)
+    )).scalar_one_or_none() is not None:
+        suffix += 1
+        candidate = f"{base}-copy" if suffix == 1 else f"{base}-copy-{suffix}"
+    return candidate
+
+
+@router.post("/products/{product_id}/duplicate")
+async def admin_product_duplicate(product_id: int, db: AsyncSession = Depends(get_db)):
+    """Создаёт копию товара (новый slug, скрыт по умолчанию) и открывает её на редактирование.
+    Копия НЕ вступает в группу вариантов оригинала — это отдельный товар."""
+    src = (await db.execute(
+        select(Product).options(selectinload(Product.images)).where(Product.id == product_id)
+    )).scalar_one_or_none()
+    if not src:
+        raise HTTPException(status_code=404)
+
+    new_slug = await _unique_slug(db, src.slug)
+    copy = Product(
+        name=f"{src.name} (копия)",
+        slug=new_slug,
+        category_id=src.category_id,
+        price=src.price,
+        description=src.description,
+        composition=src.composition,
+        kcal=src.kcal, protein=src.protein, fat=src.fat, carbs=src.carbs,
+        weight=src.weight,
+        meta_title=src.meta_title,
+        meta_description=src.meta_description,
+        sort_order=src.sort_order,
+        group_id=None,                 # копия — самостоятельный товар, не вариант группы
+        variant_label=None,
+        is_visible=False,              # по умолчанию скрыт, пока не проверят
+        label_popular=src.label_popular,
+        label_new=src.label_new,
+    )
+    db.add(copy)
+    await db.flush()
+
+    # копируем файлы изображений физически (общий файл нельзя — удаление ломает оригинал)
+    os.makedirs(MEDIA_DIR, exist_ok=True)
+    for img in sorted(src.images, key=lambda i: i.sort_order):
+        base = os.path.basename(img.url)
+        src_path = os.path.join(MEDIA_DIR, base)
+        ext = os.path.splitext(base)[1] or ".webp"
+        new_name = f"{uuid.uuid4().hex}{ext}"
+        if os.path.exists(src_path):
+            try:
+                shutil.copyfile(src_path, os.path.join(MEDIA_DIR, new_name))
+            except Exception as exc:
+                logger.warning("[product duplicate] не скопировал фото %s: %s", base, exc)
+                continue
+            db.add(ProductImage(product_id=copy.id, url=new_name, sort_order=img.sort_order))
+
+    await db.commit()
+    return _r(f"/admin/products/{copy.id}/edit?msg=Копия+создана,+проверьте+и+опубликуйте")
 
 
 @router.get("/products/{product_id}/edit", response_class=HTMLResponse)

@@ -36,7 +36,11 @@
       </div>
       <div class="adm-field">
         <label>Slug (URL) *</label>
-        <input name="slug" value="{{ product.slug if product else '' }}" required id="slug-field">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input name="slug" value="{{ product.slug if product else '' }}" required id="slug-field" style="flex:1">
+          <button type="button" class="btn btn-sm btn-secondary" id="slug-gen-btn"
+                  title="Сгенерировать из названия" style="white-space:nowrap">↻ Сгенерировать</button>
+        </div>
       </div>
       <div class="adm-field">
         <label>Категория *</label>
@@ -196,19 +200,34 @@ activeToggle.addEventListener('change', () => {
   activeHint.textContent = on ? 'Товар виден на сайте' : 'Товар скрыт с сайта';
 });
 
-// Авто-генерация slug из названия при создании
+// Транслитерация названия в slug (полная кириллица)
 const nameEl = document.querySelector('[name=name]');
 const slugEl = document.getElementById('slug-field');
-{% if not product %}
-let slugEdited = false;
+function slugify(name) {
+  return (name || '').toLowerCase()
+    .replace(/[аА]/g,'a').replace(/[бБ]/g,'b').replace(/[вВ]/g,'v')
+    .replace(/[гГ]/g,'g').replace(/[дД]/g,'d').replace(/[еЕёЁ]/g,'e')
+    .replace(/[жЖ]/g,'zh').replace(/[зЗ]/g,'z').replace(/[иИ]/g,'i')
+    .replace(/[йЙ]/g,'y').replace(/[кК]/g,'k').replace(/[лЛ]/g,'l')
+    .replace(/[мМ]/g,'m').replace(/[нН]/g,'n').replace(/[оО]/g,'o')
+    .replace(/[пП]/g,'p').replace(/[рР]/g,'r').replace(/[сС]/g,'s')
+    .replace(/[тТ]/g,'t').replace(/[уУ]/g,'u').replace(/[фФ]/g,'f')
+    .replace(/[хХ]/g,'kh').replace(/[цЦ]/g,'ts').replace(/[чЧ]/g,'ch')
+    .replace(/[шШ]/g,'sh').replace(/[щЩ]/g,'shch').replace(/[ъЪьЬ]/g,'')
+    .replace(/[ыЫ]/g,'y').replace(/[эЭ]/g,'e').replace(/[юЮ]/g,'yu')
+    .replace(/[яЯ]/g,'ya').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+}
+// Кнопка «Сгенерировать» — всегда (и для нового, и при редактировании)
+document.getElementById('slug-gen-btn').addEventListener('click', () => {
+  slugEl.value = slugify(nameEl.value);
+  slugEdited = true;
+});
+// Авто-генерация из названия только при создании и пока slug не правили вручную
+let slugEdited = {% if product %}true{% else %}false{% endif %};
 slugEl.addEventListener('input', () => slugEdited = true);
+{% if not product %}
 nameEl.addEventListener('input', () => {
-  if (!slugEdited) {
-    slugEl.value = nameEl.value.toLowerCase()
-      .replace(/[ёе]/g,'e').replace(/[а]/g,'a').replace(/[о]/g,'o')
-      .replace(/[и]/g,'i').replace(/[у]/g,'u')
-      .replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'').replace(/-+/g,'-');
-  }
+  if (!slugEdited) slugEl.value = slugify(nameEl.value);
 });
 {% endif %}
 </script>

@@ -52,6 +52,10 @@
         <td>
           <div class="btn-group">
             <a href="/admin/products/{{ p.id }}/edit" class="btn btn-sm btn-secondary">✏️</a>
+            <form method="post" action="/admin/products/{{ p.id }}/duplicate" style="display:inline">
+              <button class="btn btn-sm btn-secondary" type="submit" title="Копировать товар"
+                      onclick="return confirm('Создать копию товара «{{ p.name }}»?')">⧉</button>
+            </form>
             <form method="post" action="/admin/products/{{ p.id }}/toggle" style="display:inline">
               <button class="btn btn-sm btn-secondary" type="submit" title="{% if p.is_visible %}Скрыть{% else %}Показать{% endif %}">
                 {% if p.is_visible %}👁{% else %}🚫{% endif %}
