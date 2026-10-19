@@ -10,7 +10,6 @@ from app.database import get_db
 from app.models import Order, OrderItem, Promocode, PaymentStatus, OrderStatus, PendingOrder
 from app.services.yookassa import verify_webhook_ip
 from app.services.notifications import notify_order_status, notify_order_new
-from app.services.promo import earn_cashback
 from app.templates_env import templates
 
 router = APIRouter(tags=["payment"])

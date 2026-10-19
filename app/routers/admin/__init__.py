@@ -382,12 +382,32 @@ async def admin_order_set_status(
     if not order:
         raise HTTPException(status_code=404)
     try:
-        order.status = OrderStatus(status)
+        new_status = OrderStatus(status)
     except ValueError:
         raise HTTPException(status_code=400, detail="Неверный статус")
+    order.status = new_status
     if cancel_reason:
         order.cancel_reason = cancel_reason
     await db.commit()
+
+    # Кешбэк — при переходе в «Выполнен», для любого способа оплаты.
+    # Идемпотентно: начисляем один раз (пока cashback_earned == 0).
+    if new_status == OrderStatus.done and order.user_id and not order.cashback_earned:
+        from app.services.promo import earn_cashback
+        from app.models import Promocode
+        try:
+            promo = None
+            if order.promocode_id:
+                promo = (await db.execute(
+                    select(Promocode).where(Promocode.id == order.promocode_id)
+                )).scalar_one_or_none()
+            earned = await earn_cashback(db, order.user_id, order, promo)
+            if earned:
+                order.cashback_earned = earned
+                await db.commit()
+        except Exception as exc:
+            logger.warning("[cashback] начисление при завершении заказа #%s: %s", order_id, exc)
+
     try:
         await notify_order_status(db, order)
     except Exception as exc:

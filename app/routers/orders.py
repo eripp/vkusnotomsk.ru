@@ -19,7 +19,7 @@ from app.models import (
 from app.services.zones import find_zone
 from app.services.dadata import suggest_address, geocode_reverse
 from app.services.yookassa import create_payment
-from app.services.promo import validate_promocode, spend_cashback, earn_cashback, get_cashback_balance
+from app.services.promo import validate_promocode, spend_cashback, get_cashback_balance
 from app.services.notifications import notify_order_new
 from app.deps import get_optional_user
 from app.config import settings
@@ -118,18 +118,8 @@ async def _materialize_order(db: AsyncSession, data: dict, paid: bool) -> Order:
 
     await db.commit()
 
-    # начисление кешбэка — только для оплаченного заказа
-    if paid and order.user_id:
-        pr = None
-        if data.get("promocode_id"):
-            pr = (await db.execute(select(Promocode).where(Promocode.id == data["promocode_id"]))).scalar_one_or_none()
-        try:
-            earned = await earn_cashback(db, order.user_id, order, pr)
-            if earned:
-                order.cashback_earned = earned
-                await db.commit()
-        except Exception as exc:
-            logger.warning("[cashback] начисление: %s", exc)
+    # Кешбэк начисляется НЕ при создании, а когда заказ получает статус «Выполнен»
+    # (для любого способа оплаты). См. admin_order_set_status.
 
     return order
 
