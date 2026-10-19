@@ -80,33 +80,38 @@ function syncType() {
   const isRef = document.getElementById('pm-type').value === 'referral';
   document.getElementById('pm-referral-block').style.display = isRef ? '' : 'none';
 }
-document.getElementById('pm-type').addEventListener('change', syncType);
 
-// Поиск блогера по телефону/имени с автоподстановкой
+// Привязка слушателей — после загрузки DOM: модалка (#pm-type, #pm-owner-search)
+// объявлена ниже этого скрипта, на момент выполнения её ещё нет.
 let ownerSearchTimer = null;
-document.getElementById('pm-owner-search').addEventListener('input', function () {
-  clearTimeout(ownerSearchTimer);
-  const q = this.value.trim();
-  const box = document.getElementById('pm-owner-results');
-  if (!q) { box.style.display = 'none'; return; }
-  ownerSearchTimer = setTimeout(async () => {
-    try {
-      const res = await fetch('/admin/users/search?q=' + encodeURIComponent(q));
-      const data = await res.json();
-      if (!data.users.length) { box.innerHTML = '<div style="padding:8px;color:#999">Не найдено</div>'; box.style.display=''; return; }
-      box.innerHTML = data.users.map(u =>
-        `<div class="pm-owner-opt" data-id="${u.id}" data-label="${(u.name||'—')} (${u.phone})"
-              style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0">
-           #${u.id} · ${u.name || '—'} · ${u.phone}</div>`).join('');
-      box.style.display = '';
-      box.querySelectorAll('.pm-owner-opt').forEach(el => el.addEventListener('click', () => {
-        document.getElementById('pm-owner-id').value = el.dataset.id;
-        document.getElementById('pm-owner-current').textContent = 'Выбран: ' + el.dataset.label;
-        document.getElementById('pm-owner-search').value = '';
-        box.style.display = 'none';
-      }));
-    } catch { box.style.display = 'none'; }
-  }, 300);
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('pm-type').addEventListener('change', syncType);
+
+  // Поиск блогера по телефону/имени с автоподстановкой
+  document.getElementById('pm-owner-search').addEventListener('input', function () {
+    clearTimeout(ownerSearchTimer);
+    const q = this.value.trim();
+    const box = document.getElementById('pm-owner-results');
+    if (!q) { box.style.display = 'none'; return; }
+    ownerSearchTimer = setTimeout(async () => {
+      try {
+        const res = await fetch('/admin/users/search?q=' + encodeURIComponent(q));
+        const data = await res.json();
+        if (!data.users.length) { box.innerHTML = '<div style="padding:8px;color:#999">Не найдено</div>'; box.style.display=''; return; }
+        box.innerHTML = data.users.map(u =>
+          `<div class="pm-owner-opt" data-id="${u.id}" data-label="${(u.name||'—')} (${u.phone})"
+                style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0">
+             #${u.id} · ${u.name || '—'} · ${u.phone}</div>`).join('');
+        box.style.display = '';
+        box.querySelectorAll('.pm-owner-opt').forEach(el => el.addEventListener('click', () => {
+          document.getElementById('pm-owner-id').value = el.dataset.id;
+          document.getElementById('pm-owner-current').textContent = 'Выбран: ' + el.dataset.label;
+          document.getElementById('pm-owner-search').value = '';
+          box.style.display = 'none';
+        }));
+      } catch { box.style.display = 'none'; }
+    }, 300);
+  });
 });
 
 async function savePromo() {
