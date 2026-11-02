@@ -211,6 +211,7 @@ const checkout = {
   _promoCode: null,
   _promoDiscount: 0,
   _cashbackSpend: 0,
+  _cashbackMaxPct: 100,   // потолок оплаты кешбэком, % (из настроек)
 
   init() {
     this._renderSummary();
@@ -279,8 +280,10 @@ const checkout = {
     try {
       const res = await fetch('/api/cashback/balance');
       if (!res.ok) return;
-      const { balance } = await res.json();
-      if (balance > 0) {
+      const { balance, max_pct } = await res.json();
+      if (typeof max_pct === 'number') this._cashbackMaxPct = max_pct;
+      // при max_pct = 0 списание отключено — блок не показываем
+      if (balance > 0 && this._cashbackMaxPct > 0) {
         document.getElementById('cashback-block').style.display = '';
         document.getElementById('cb-available').textContent = balance.toLocaleString('ru');
       }
@@ -323,10 +326,17 @@ const checkout = {
   applyCashback() {
     const val = parseInt(document.getElementById('f-cashback')?.value) || 0;
     const avail = parseInt(document.getElementById('cb-available')?.textContent.replace(/\s/g,'')) || 0;
-    this._cashbackSpend = Math.min(val, avail, cart.total - this._promoDiscount);
+    const payable = cart.total - this._promoDiscount;
+    // потолок: не больше X% от оплачиваемой суммы (cashback_max_pct)
+    const capByPct = Math.floor(payable * (this._cashbackMaxPct ?? 100) / 100);
+    this._cashbackSpend = Math.max(0, Math.min(val, avail, payable, capByPct));
     const el = document.getElementById('cashback-result');
     el.style.display = '';
-    el.textContent = `✓ Будет списано ${this._cashbackSpend} ₽`;
+    if (val > this._cashbackSpend && this._cashbackMaxPct < 100) {
+      el.textContent = `✓ Будет списано ${this._cashbackSpend} ₽ (не более ${this._cashbackMaxPct}% заказа)`;
+    } else {
+      el.textContent = `✓ Будет списано ${this._cashbackSpend} ₽`;
+    }
     this._updateTotals();
   },
 

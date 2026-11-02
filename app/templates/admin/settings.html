@@ -206,8 +206,12 @@
     <div class="adm-card-title">Кешбэк</div>
     <div class="adm-form">
       <div class="adm-field">
-        <label>Максимальный % оплаты кешбэком <span style="color:#aaa;font-weight:400">— cashback_max_pct</span></label>
-        <input name="cashback_max_pct" type="number" min="0" max="100" value="{{ val('cashback_max_pct', '30') }}" style="max-width:100px">
+        <label>% начисления кешбэка <span style="color:#aaa;font-weight:400">— cashback_earn_pct (с суммы заказа; 0 = не начислять)</span></label>
+        <input name="cashback_earn_pct" type="number" min="0" max="100" value="{{ val('cashback_earn_pct', '0') }}" style="max-width:100px">
+      </div>
+      <div class="adm-field">
+        <label>Максимальный % оплаты кешбэком <span style="color:#aaa;font-weight:400">— cashback_max_pct (сколько от заказа можно оплатить бонусами; 0 = списание запрещено)</span></label>
+        <input name="cashback_max_pct" type="number" min="0" max="100" value="{{ val('cashback_max_pct', '100') }}" style="max-width:100px">
       </div>
     </div>
   </div>

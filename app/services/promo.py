@@ -77,6 +77,20 @@ def _promo_label(promo: Promocode, discount: int) -> str:
 
 # ─── Кешбэк ───────────────────────────────────────────────────────────────────
 
+async def get_cashback_max_pct(db: AsyncSession) -> int:
+    """Максимальный % стоимости заказа, который можно оплатить кешбэком (0..100).
+    По умолчанию 100 (ограничения нет), если настройка не задана."""
+    cfg = (await db.execute(
+        select(SiteSetting).where(SiteSetting.key == "cashback_max_pct")
+    )).scalar_one_or_none()
+    if not cfg or cfg.value == "":
+        return 100
+    try:
+        return max(0, min(100, int(cfg.value)))
+    except (ValueError, TypeError):
+        return 100
+
+
 async def get_cashback_balance(db: AsyncSession, user_id: int) -> int:
     result = await db.execute(
         select(CashbackAccount).where(CashbackAccount.user_id == user_id)
@@ -97,7 +111,7 @@ async def earn_cashback(
       • cashback/referral-промокод с cashback_buyer_pct → покупателю этот %.
         (у referral покупатель может вместо кешбэка получить скидку — тогда
          cashback_buyer_pct пустой и покупателю кешбэк не начисляется);
-      • нет промокода (или discount) → покупателю % из настройки cashback_max_pct;
+      • нет промокода (или discount) → покупателю % из настройки cashback_earn_pct;
       • referral-промокод → дополнительно блогеру-владельцу cashback_owner_pct
         от той же базы (отдельной транзакцией).
     """
@@ -111,8 +125,9 @@ async def earn_cashback(
     if promo and promo.type in (PromoType.cashback, PromoType.referral):
         buyer_pct = promo.cashback_buyer_pct or 0
     elif not promo or promo.type == PromoType.discount:
+        # базовая ставка начисления (НЕ cashback_max_pct — та ограничивает списание)
         cfg = (await db.execute(
-            select(SiteSetting).where(SiteSetting.key == "cashback_max_pct")
+            select(SiteSetting).where(SiteSetting.key == "cashback_earn_pct")
         )).scalar_one_or_none()
         if cfg:
             try:

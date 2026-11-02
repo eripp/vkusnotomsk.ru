@@ -19,7 +19,7 @@ from app.models import (
 from app.services.zones import find_zone
 from app.services.dadata import suggest_address, geocode_reverse
 from app.services.yookassa import create_payment
-from app.services.promo import validate_promocode, spend_cashback, get_cashback_balance
+from app.services.promo import validate_promocode, spend_cashback, get_cashback_balance, get_cashback_max_pct
 from app.services.notifications import notify_order_new
 from app.deps import get_optional_user
 from app.config import settings
@@ -182,10 +182,11 @@ async def cashback_balance(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_optional_user),
 ):
+    max_pct = await get_cashback_max_pct(db)
     if not current_user:
-        return {"balance": 0}
+        return {"balance": 0, "max_pct": max_pct}
     balance = await get_cashback_balance(db, current_user.id)
-    return {"balance": balance}
+    return {"balance": balance, "max_pct": max_pct}
 
 
 # ─── API: создать заказ ───────────────────────────────────────────────────────
@@ -288,11 +289,15 @@ async def create_order(
         promo_obj = promo_result["promo"]
         discount_amount = promo_result["discount"]
 
-    # кешбэк — списание
+    # кешбэк — списание (с учётом потолка cashback_max_pct: не больше X% от
+    # оплачиваемой суммы заказа)
     cashback_spend = 0
     if payload.cashback_spend > 0 and current_user:
         balance = await get_cashback_balance(db, current_user.id)
-        cashback_spend = min(payload.cashback_spend, balance, subtotal - discount_amount)
+        payable = max(0, subtotal - discount_amount)
+        max_pct = await get_cashback_max_pct(db)
+        cap_by_pct = payable * max_pct // 100
+        cashback_spend = min(payload.cashback_spend, balance, payable, cap_by_pct)
         if cashback_spend < 0:
             cashback_spend = 0
 
