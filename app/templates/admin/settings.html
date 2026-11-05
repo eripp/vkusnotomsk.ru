@@ -46,6 +46,26 @@
           <span style="color:#aaa;font-size:12px">по умолчанию #d44f1a</span>
         </div>
       </div>
+      <div class="adm-field">
+        <label>Цвет фона сайта <span style="color:#aaa;font-weight:400">— фон страниц (bg_color)</span></label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="color" id="bg-color-picker"
+                 value="{{ val('bg_color') or '#f5f5f3' }}"
+                 style="width:48px;height:38px;padding:2px;cursor:pointer">
+          <input type="text" name="bg_color" id="bg-color-text"
+                 value="{{ val('bg_color') or '#f5f5f3' }}"
+                 placeholder="#f5f5f3" style="max-width:140px;font-family:monospace">
+          <span style="color:#aaa;font-size:12px">по умолчанию #f5f5f3 (пусто = стандартный)</span>
+        </div>
+      </div>
+      <div class="adm-field">
+        <label>Пресеты оформления</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn-sm btn-secondary" onclick="applyPreset('bf')">🖤 Чёрная пятница</button>
+          <button type="button" class="btn btn-sm btn-secondary" onclick="applyPreset('default')">↺ Стандарт</button>
+        </div>
+        <span style="color:#aaa;font-size:12px">Заполнит поля цветов — не забудьте «Сохранить».</span>
+      </div>
     </div>
   </div>
 
@@ -230,5 +250,20 @@ function syncColorPair(pickerId, textId) {
 }
 syncColorPair('brand-color-picker', 'brand-color-text');
 syncColorPair('brand-hover-picker', 'brand-hover-text');
+syncColorPair('bg-color-picker', 'bg-color-text');
+
+// Пресеты цветовой гаммы: заполняют поля (сохранение — отдельной кнопкой)
+const COLOR_PRESETS = {
+  bf:      { brand_color: '#E6B422', brand_hover: '#c99a12', bg_color: '#141414' },  // чёрная пятница: золото на чёрном
+  default: { brand_color: '#E85D24', brand_hover: '#d44f1a', bg_color: '#f5f5f3' },
+};
+function applyPreset(name) {
+  const p = COLOR_PRESETS[name];
+  if (!p) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('brand-color-text', p.brand_color); set('brand-color-picker', p.brand_color);
+  set('brand-hover-text', p.brand_hover); set('brand-hover-picker', p.brand_hover);
+  set('bg-color-text', p.bg_color);       set('bg-color-picker', p.bg_color);
+}
 </script>
 {% endblock %}
