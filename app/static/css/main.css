@@ -1,7 +1,7 @@
 /* ─── Brand theme ────────────────────────────────────────────────────────── */
 /* Фирменный цвет. Значение по умолчанию; переопределяется из настроек админки
    (site_settings.brand_color) инлайн-стилем в <head> base.html. */
-:root { --brand: #E85D24; --brand-hover: #d44f1a; --page-bg: #f5f5f3; }
+:root { --brand: #74b628; --brand-hover: #ededed; --page-bg: #f5f5f3; }
 
 /* ─── Reset & Base ───────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

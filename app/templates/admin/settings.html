@@ -26,24 +26,24 @@
         <label>Фирменный цвет <span style="color:#aaa;font-weight:400">— кнопки, акценты на сайте (brand_color)</span></label>
         <div style="display:flex;align-items:center;gap:10px">
           <input type="color" id="brand-color-picker"
-                 value="{{ val('brand_color') or '#E85D24' }}"
+                 value="{{ val('brand_color') or '#74b628' }}"
                  style="width:48px;height:38px;padding:2px;cursor:pointer">
           <input type="text" name="brand_color" id="brand-color-text"
-                 value="{{ val('brand_color') or '#E85D24' }}"
-                 placeholder="#E85D24" style="max-width:140px;font-family:monospace">
-          <span style="color:#aaa;font-size:12px">по умолчанию #E85D24</span>
+                 value="{{ val('brand_color') or '#74b628' }}"
+                 placeholder="#74b628" style="max-width:140px;font-family:monospace">
+          <span style="color:#aaa;font-size:12px">по умолчанию #74b628</span>
         </div>
       </div>
       <div class="adm-field">
         <label>Цвет при наведении <span style="color:#aaa;font-weight:400">— hover кнопок (brand_hover)</span></label>
         <div style="display:flex;align-items:center;gap:10px">
           <input type="color" id="brand-hover-picker"
-                 value="{{ val('brand_hover') or '#d44f1a' }}"
+                 value="{{ val('brand_hover') or '#ededed' }}"
                  style="width:48px;height:38px;padding:2px;cursor:pointer">
           <input type="text" name="brand_hover" id="brand-hover-text"
-                 value="{{ val('brand_hover') or '#d44f1a' }}"
-                 placeholder="#d44f1a" style="max-width:140px;font-family:monospace">
-          <span style="color:#aaa;font-size:12px">по умолчанию #d44f1a</span>
+                 value="{{ val('brand_hover') or '#ededed' }}"
+                 placeholder="#ededed" style="max-width:140px;font-family:monospace">
+          <span style="color:#aaa;font-size:12px">по умолчанию #ededed</span>
         </div>
       </div>
       <div class="adm-field">
@@ -255,7 +255,7 @@ syncColorPair('bg-color-picker', 'bg-color-text');
 // Пресеты цветовой гаммы: заполняют поля (сохранение — отдельной кнопкой)
 const COLOR_PRESETS = {
   bf:      { brand_color: '#E6B422', brand_hover: '#c99a12', bg_color: '#141414' },  // чёрная пятница: золото на чёрном
-  default: { brand_color: '#E85D24', brand_hover: '#d44f1a', bg_color: '#f5f5f3' },
+  default: { brand_color: '#74b628', brand_hover: '#ededed', bg_color: '#f5f5f3' },
 };
 function applyPreset(name) {
   const p = COLOR_PRESETS[name];
